@@ -20,10 +20,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Llama Stack
+# Initialize Llama Stack with Nebius API
 llama_stack = LlamaStack(
-    api_key=settings.LLAMA_API_KEY,
-    api_url=settings.LLAMA_API_URL
+    api_key=settings.NEBIUS_API_KEY,
+    api_url=settings.NEBIUS_API_URL,
+    model_name="meta-llama/Meta-Llama-3.1-405B-Instruct"
 )
 
 # Include API routers

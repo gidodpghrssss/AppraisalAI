@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     LLAMA_API_KEY: str = ""
     LLAMA_API_URL: str = "http://localhost:8321"
 
+    # Nebius API Configuration
+    NEBIUS_API_KEY: str = ""
+    NEBIUS_API_URL: str = "https://api.studio.nebius.com/v1"
+
     # External Services
     MLS_API_KEY: str = ""
     COSTAR_API_KEY: str = ""

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.core.config import settings
 import requests
+from openai import OpenAI
 
 router = APIRouter()
 
@@ -10,25 +11,25 @@ async def health_check():
         # Check database connection
         # Add your database health check logic here
         
-        # Check Llama Stack connection
+        # Check Nebius API connection
         try:
-            response = requests.get(f"{settings.LLAMA_API_URL}/health")
-            response.raise_for_status()
+            client = OpenAI(
+                base_url=settings.NEBIUS_API_URL,
+                api_key=settings.NEBIUS_API_KEY
+            )
+            # Simple request to check if API is accessible
+            client.models.list()
+            nebius_status = "ok"
         except Exception as e:
-            return {
-                "status": "warning",
-                "services": {
-                    "database": "ok",
-                    "llama_stack": "unavailable"
-                }
-            }
+            nebius_status = "unavailable"
             
         return {
-            "status": "ok",
+            "status": "ok" if nebius_status == "ok" else "warning",
             "services": {
                 "database": "ok",
-                "llama_stack": "ok"
-            }
+                "nebius_api": nebius_status
+            },
+            "version": settings.VERSION
         }
         
     except Exception as e:
