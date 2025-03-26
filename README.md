@@ -1,6 +1,6 @@
 # AI-Powered Appraisal System
 
-An advanced AI-powered appraisal system for real estate valuation and property assessment.
+An advanced AI-powered appraisal system for real estate valuation and property assessment using free data sources.
 
 ## Features
 
@@ -11,6 +11,8 @@ An advanced AI-powered appraisal system for real estate valuation and property a
 - Report Generation & Compliance
 - Mobile Fieldwork Tools
 - Security & Scalability
+- **Free Data Sources**: Uses OpenStreetMap and other free data sources for property information
+- **Web Search Integration**: Utilizes web search functionality to gather real-time property and market data
 
 ## Setup
 
@@ -64,6 +66,9 @@ LLAMA_API_URL=http://localhost:8321
 # External Services
 MLS_API_KEY=your_mls_key
 COSTAR_API_KEY=your_costar_key
+
+# Free Data Sources
+OPENSTREETMAP_API_KEY=your_openstreetmap_api_key
 ```
 
 ## Contributing
