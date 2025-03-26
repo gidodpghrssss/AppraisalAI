@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: ai-appraisal-system
+    env: python
+    buildCommand: docker build -t ai-appraisal .
+    startCommand: docker run -p 8000:8000 ai-appraisal
+    envVars:
+      - key: DATABASE_URL
+        fromService: postgres
+      - key: LLAMA_API_KEY
+        fromSecret: llama_api_key
+      - key: LLAMA_API_URL
+        value: http://localhost:8321
+      - key: MLS_API_KEY
+        fromSecret: mls_api_key
+      - key: COSTAR_API_KEY
+        fromSecret: costar_api_key
+    healthCheckPath: /health
+    allowInsecure: true
+    
+  - type: database
+    name: postgres
+    database: postgres
+    size: 10GB
+    
+secrets:
+  - name: llama_api_key
+    value: ""
+  - name: mls_api_key
+    value: ""
+  - name: costar_api_key
+    value: ""
