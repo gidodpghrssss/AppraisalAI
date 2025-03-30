@@ -1,15 +1,38 @@
-from fastapi import FastAPI, HTTPException
+"""
+Main application file for the Appraisal AI Agent.
+"""
+import uvicorn
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from llama_stack import LlamaStack
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+import os
+import logging
+
 from app.core.config import settings
 from app.api.v1.api import api_router
-from app.api.v1.health import router as health_router
+from app.web.controllers import router as web_router
+from app.db.init_db import init_db
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize FastAPI app
 app = FastAPI(
-    title="AI Appraisal System",
-    description="Advanced AI-powered real estate appraisal system",
-    version="1.0.0"
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url=f"{settings.API_V1_STR}/docs",
+    redoc_url=f"{settings.API_V1_STR}/redoc",
 )
+
+# Initialize database
+try:
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("Database initialized successfully.")
+except Exception as e:
+    logger.error(f"Error initializing database: {e}")
 
 # Configure CORS
 app.add_middleware(
@@ -20,21 +43,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Llama Stack with Nebius API
-llama_stack = LlamaStack(
-    api_key=settings.NEBIUS_API_KEY,
-    api_url=settings.NEBIUS_API_URL,
-    model_name="meta-llama/Meta-Llama-3.1-405B-Instruct"
-)
+# Include API router
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Include API routers
-app.include_router(api_router, prefix="/api/v1")
-app.include_router(health_router, prefix="/health")
+# Include web router for the Apeko website
+app.include_router(web_router)
+
+# Mount static files
+try:
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
+except:
+    # Static directory might not exist in development
+    logger.warning("Static directory not found. Creating directory...")
+    pass
+
+# Create necessary directories
+os.makedirs("app/data/files", exist_ok=True)
+os.makedirs("app/data/embeddings", exist_ok=True)
+os.makedirs("app/static/css", exist_ok=True)
+os.makedirs("app/static/js", exist_ok=True)
+os.makedirs("app/static/images", exist_ok=True)
 
 @app.get("/")
-def read_root():
-    return {"message": "Welcome to AI Appraisal System"}
+async def root():
+    """Root endpoint that redirects to the UI."""
+    return {"message": "Welcome to Appraisal AI Agent. Navigate to /ui for the web interface."}
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "app.main:app",
+        host=settings.HOST,
+        port=settings.PORT,
+        reload=settings.DEBUG,
+    )
