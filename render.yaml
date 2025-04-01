@@ -7,19 +7,19 @@ services:
     startCommand: gunicorn app.main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:$PORT
     envVars:
       - key: PORT
-        value: 8002
+        value: 8001
       - key: HOST
         value: 0.0.0.0
       - key: DATABASE_URL
-        value: sqlite:///./app.db
+        fromDatabase:
+          name: appraisalai-db
+          property: connectionString
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
         value: false
       - key: SECRET_KEY
-        fromDatabase:
-          name: appraisalai-db
-          property: secret_key
+        generateValue: true
       - key: NEBIUS_API_KEY
         sync: false
       - key: NEBIUS_ENDPOINT
@@ -31,3 +31,4 @@ databases:
   - name: appraisalai-db
     databaseName: appraisalai
     user: appraisalai
+    plan: free
