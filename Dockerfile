@@ -21,5 +21,16 @@ RUN mkdir -p app/templates
 # Expose the port
 EXPOSE 8001
 
-# Run the application
-CMD gunicorn app.main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT:-8001}
+# Create a startup script that runs the database fix and then starts the application
+RUN echo '#!/bin/bash\n\
+echo "Running database fix script..."\n\
+python render_db_fix.py\n\
+echo "Starting application..."\n\
+exec gunicorn app.main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT:-8001}\n\
+' > /app/start.sh
+
+# Make the script executable
+RUN chmod +x /app/start.sh
+
+# Run the startup script
+CMD ["/app/start.sh"]
