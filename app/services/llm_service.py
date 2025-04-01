@@ -1,98 +1,134 @@
+"""
+LLM service for interacting with Nebius API to access language models.
+"""
+import json
+import logging
+from typing import Dict, List, Any, Optional
+from pydantic import BaseModel
 from openai import OpenAI
-from typing import List, Dict, Any
-import os
+
 from app.core.config import settings
-from llama_stack import LlamaStack
 
-class LlamaService:
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+class Message(BaseModel):
+    """Message model for LLM conversations."""
+    role: str
+    content: str
+
+class LLMService:
+    """Service for interacting with Nebius LLM API using OpenAI client."""
+    
     def __init__(self):
-        # Initialize OpenAI client with Nebius API
+        """Initialize the LLM service."""
+        self.api_key = settings.NEBIUS_API_KEY
+        self.base_url = settings.NEBIUS_ENDPOINT.rsplit("/chat/completions", 1)[0]
+        self.model = settings.MODEL_NAME
+        
+        # Initialize OpenAI client with Nebius configuration
         self.client = OpenAI(
-            base_url=settings.NEBIUS_API_URL,
-            api_key=settings.NEBIUS_API_KEY
+            api_key=self.api_key,
+            base_url=self.base_url
         )
-        self.model = "meta-llama/Meta-Llama-3.1-405B-Instruct"
         
-        # Initialize LlamaStack for more advanced agent capabilities
-        self.llama_stack = LlamaStack(
-            api_key=settings.NEBIUS_API_KEY,
-            api_url=settings.NEBIUS_API_URL,
-            model_name=self.model
-        )
-
-    async def get_completion(self, messages: List[Dict[str, str]], temperature: float = 0.7) -> str:
+        logger.info(f"Initialized LLM service with model: {self.model}")
+        logger.info(f"Using base URL: {self.base_url}")
+    
+    async def check_connection(self) -> bool:
         """
-        Get completion from Llama model through Nebius API
+        Check if the connection to the LLM API is working.
+        Returns True if connection is successful, False otherwise.
         """
+        # Simple test query to check if the API is responsive
         try:
-            completion = self.client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                messages=messages,
-                temperature=temperature
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": "Hello"}
+                ],
+                max_tokens=10
             )
-            return completion.choices[0].message.content
+            logger.info("LLM API connection successful")
+            return True
         except Exception as e:
-            print(f"Error getting completion: {str(e)}")
-            raise
-
-    async def analyze_property(self, 
-                             property_details: Dict[str, Any],
-                             analysis_type: str = "full") -> Dict[str, Any]:
+            logger.error(f"Error connecting to LLM API: {str(e)}")
+            return False
+    
+    async def generate_completion(
+        self, 
+        messages: List[Message], 
+        temperature: float = 0.7,
+        max_tokens: int = 1024,
+        tools: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
         """
-        Analyze property using Llama model
-        """
-        system_prompt = """You are an expert real estate appraiser AI assistant. 
-        Analyze the provided property details and provide a comprehensive evaluation.
-        Focus on key factors that affect property value."""
-
-        property_prompt = f"""
-        Property Details: {property_details}
-        Analysis Type: {analysis_type}
+        Generate a completion from the LLM.
         
-        Provide a detailed analysis including:
-        1. Market value estimation
-        2. Key value factors
-        3. Risk assessment
-        4. Comparable properties considerations
-        5. Recommendations
+        Args:
+            messages: List of messages in the conversation
+            temperature: Temperature for generation (0.0 to 1.0)
+            max_tokens: Maximum number of tokens to generate
+            tools: Optional list of tools to provide to the model
+            
+        Returns:
+            The LLM response
         """
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": property_prompt}
-        ]
-
-        analysis = await self.get_completion(messages)
-        return {
-            "analysis": analysis,
-            "property_id": property_details.get("property_id"),
-            "analysis_type": analysis_type
-        }
-
-    async def get_market_insights(self, location: str, property_type: str) -> Dict[str, Any]:
-        """
-        Get market insights for a specific location and property type
-        """
-        prompt = f"""Analyze the real estate market for:
-        Location: {location}
-        Property Type: {property_type}
+        # Convert Message objects to dict format expected by API
+        formatted_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
         
-        Provide insights on:
-        1. Market trends
-        2. Price movements
-        3. Supply and demand
-        4. Investment potential
-        5. Risk factors
+        try:
+            # Create completion request
+            if tools:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=formatted_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    tools=tools
+                )
+            else:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=formatted_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+            
+            # Convert response to dictionary
+            return response.model_dump()
+            
+        except Exception as e:
+            logger.error(f"Exception during LLM API call: {str(e)}")
+            return {"error": "Exception during API call", "details": str(e)}
+    
+    async def generate_with_tools(
+        self,
+        messages: List[Message],
+        tools: List[Dict[str, Any]],
+        temperature: float = 0.7,
+        max_tokens: int = 1024
+    ) -> Dict[str, Any]:
         """
+        Generate a completion with tool calling capabilities.
+        
+        Args:
+            messages: List of messages in the conversation
+            tools: List of tools to provide to the model
+            temperature: Temperature for generation
+            max_tokens: Maximum number of tokens to generate
+            
+        Returns:
+            The LLM response with tool calls
+        """
+        return await self.generate_completion(
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            tools=tools
+        )
 
-        messages = [
-            {"role": "system", "content": "You are a real estate market analysis expert."},
-            {"role": "user", "content": prompt}
-        ]
-
-        insights = await self.get_completion(messages)
-        return {
-            "location": location,
-            "property_type": property_type,
-            "insights": insights
-        }
+# Alias for backward compatibility
+LlamaService = LLMService
