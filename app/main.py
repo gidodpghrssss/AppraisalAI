@@ -44,6 +44,86 @@ try:
     logger.info("Initializing database...")
     init_db()
     logger.info("Database initialized successfully.")
+
+# Run database migrations
+logger.info("Running database migrations...")
+try:
+    from sqlalchemy import text
+    
+    # Check if we're using PostgreSQL
+    if "postgresql" in DATABASE_URL:
+        logger.info("PostgreSQL database detected, checking for schema issues")
+        
+        # Fix projects table schema issues
+        try:
+            # Check if title column exists
+            check_column_sql = """
+            SELECT EXISTS (
+                SELECT FROM information_schema.columns 
+                WHERE table_name = 'projects' AND column_name = 'title'
+            );
+            """
+            title_exists = db.execute(text(check_column_sql)).scalar()
+            
+            if not title_exists:
+                logger.info("Adding title column to projects table")
+                db.execute(text("ALTER TABLE projects ADD COLUMN title VARCHAR(255);"))
+                db.commit()
+            
+            # Check if client_id column type
+            check_column_sql = """
+            SELECT data_type FROM information_schema.columns 
+            WHERE table_name = 'projects' AND column_name = 'client_id';
+            """
+            result = db.execute(text(check_column_sql)).fetchone()
+            
+            if result:
+                data_type = result[0]
+                logger.info(f"client_id column exists with type: {data_type}")
+                
+                if data_type == 'character varying':
+                    logger.info("Converting client_id from VARCHAR to INTEGER")
+                    # Create a temporary column
+                    db.execute(text("ALTER TABLE projects ADD COLUMN client_id_temp INTEGER;"))
+                    # Try to convert existing values
+                    db.execute(text("UPDATE projects SET client_id_temp = client_id::INTEGER WHERE client_id ~ '^[0-9]+$';"))
+                    # Drop the old column
+                    db.execute(text("ALTER TABLE projects DROP COLUMN client_id;"))
+                    # Rename the temp column
+                    db.execute(text("ALTER TABLE projects RENAME COLUMN client_id_temp TO client_id;"))
+                    db.commit()
+            
+            # Check if property_id column type
+            check_column_sql = """
+            SELECT data_type FROM information_schema.columns 
+            WHERE table_name = 'projects' AND column_name = 'property_id';
+            """
+            result = db.execute(text(check_column_sql)).fetchone()
+            
+            if result:
+                data_type = result[0]
+                logger.info(f"property_id column exists with type: {data_type}")
+                
+                if data_type == 'character varying':
+                    logger.info("Converting property_id from VARCHAR to INTEGER")
+                    # Create a temporary column
+                    db.execute(text("ALTER TABLE projects ADD COLUMN property_id_temp INTEGER;"))
+                    # Try to convert existing values
+                    db.execute(text("UPDATE projects SET property_id_temp = property_id::INTEGER WHERE property_id ~ '^[0-9]+$';"))
+                    # Drop the old column
+                    db.execute(text("ALTER TABLE projects DROP COLUMN property_id;"))
+                    # Rename the temp column
+                    db.execute(text("ALTER TABLE projects RENAME COLUMN property_id_temp TO property_id;"))
+                    db.commit()
+            
+            logger.info("Database migration completed successfully")
+        except Exception as e:
+            logger.error(f"Error during database migration: {e}")
+            db.rollback()
+except Exception as e:
+    logger.error(f"Failed to run database migrations: {e}")
+
+
 except Exception as e:
     logger.error(f"Error initializing database: {e}")
 
