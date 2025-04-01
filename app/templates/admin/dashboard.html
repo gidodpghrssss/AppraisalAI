@@ -95,9 +95,9 @@
                             <i class="fas fa-users"></i>
                         </div>
                     </div>
-                    <div class="dashboard-card-value">{{ stats.total_clients }}</div>
+                    <div class="dashboard-card-value">{{ stats.total_clients if stats.total_clients else 0 }}</div>
                     <div class="dashboard-card-change change-up">
-                        <i class="fas fa-arrow-up"></i> 12% from last month
+                        <i class="fas fa-arrow-up"></i> {{ stats.total_clients_change if stats.total_clients_change else 0 }}% from last month
                     </div>
                 </div>
                 <div class="dashboard-card">
@@ -107,9 +107,9 @@
                             <i class="fas fa-eye"></i>
                         </div>
                     </div>
-                    <div class="dashboard-card-value">{{ stats.website_visits }}</div>
+                    <div class="dashboard-card-value">{{ stats.website_visits if stats.website_visits else 0 }}</div>
                     <div class="dashboard-card-change change-up">
-                        <i class="fas fa-arrow-up"></i> 8% from last month
+                        <i class="fas fa-arrow-up"></i> {{ stats.website_visits_change if stats.website_visits_change else 0 }}% from last month
                     </div>
                 </div>
                 <div class="dashboard-card">
@@ -119,9 +119,9 @@
                             <i class="fas fa-file-alt"></i>
                         </div>
                     </div>
-                    <div class="dashboard-card-value">{{ stats.total_reports }}</div>
+                    <div class="dashboard-card-value">{{ stats.total_reports if stats.total_reports else 0 }}</div>
                     <div class="dashboard-card-change change-up">
-                        <i class="fas fa-arrow-up"></i> 5% from last month
+                        <i class="fas fa-arrow-up"></i> {{ stats.total_reports_change if stats.total_reports_change else 0 }}% from last month
                     </div>
                 </div>
                 <div class="dashboard-card">
@@ -131,9 +131,9 @@
                             <i class="fas fa-dollar-sign"></i>
                         </div>
                     </div>
-                    <div class="dashboard-card-value">${{ stats.monthly_revenue }}</div>
+                    <div class="dashboard-card-value">${{ stats.monthly_revenue if stats.monthly_revenue else 0 }}</div>
                     <div class="dashboard-card-change change-up">
-                        <i class="fas fa-arrow-up"></i> 15% from last month
+                        <i class="fas fa-arrow-up"></i> {{ stats.monthly_revenue_change if stats.monthly_revenue_change else 0 }}% from last month
                     </div>
                 </div>
             </div>
@@ -179,7 +179,7 @@
                                 <i class="fas fa-file-alt"></i>
                             </div>
                         </div>
-                        <div class="dashboard-card-value">{{ rag_stats.total_documents }}</div>
+                        <div class="dashboard-card-value">{{ rag_stats.total_documents if rag_stats.total_documents else 0 }}</div>
                     </div>
                     <div class="dashboard-card">
                         <div class="dashboard-card-header">
@@ -188,7 +188,7 @@
                                 <i class="fas fa-puzzle-piece"></i>
                             </div>
                         </div>
-                        <div class="dashboard-card-value">{{ rag_stats.total_chunks }}</div>
+                        <div class="dashboard-card-value">{{ rag_stats.total_chunks if rag_stats.total_chunks else 0 }}</div>
                     </div>
                     <div class="dashboard-card">
                         <div class="dashboard-card-header">
@@ -197,7 +197,7 @@
                                 <i class="fas fa-search"></i>
                             </div>
                         </div>
-                        <div class="dashboard-card-value">{{ rag_stats.total_queries }}</div>
+                        <div class="dashboard-card-value">{{ rag_stats.total_queries if rag_stats.total_queries else 0 }}</div>
                     </div>
                 </div>
                 <div class="dashboard-chart">
@@ -219,30 +219,38 @@
                         <a href="/admin/activity" class="btn btn-primary">View All</a>
                     </div>
                 </div>
-                <table class="activity-table">
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Action</th>
-                            <th>Time</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for activity in recent_activity %}
-                        <tr>
-                            <td>{{ activity.user }}</td>
-                            <td>{{ activity.action }}</td>
-                            <td>{{ activity.time }}</td>
-                            <td>
-                                <span class="status-badge {{ activity.status_class }}">
-                                    {{ activity.status }}
-                                </span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if recent_activity %}
+                                {% for activity in recent_activity %}
+                                <tr>
+                                    <td>{{ activity.user }}</td>
+                                    <td>{{ activity.action }}</td>
+                                    <td>{{ activity.time }}</td>
+                                    <td>
+                                        <span class="status-badge {{ activity.status_class }}">
+                                            {{ activity.status }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center">No recent activities</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </main>
     </div>
