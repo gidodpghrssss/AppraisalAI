@@ -2,7 +2,7 @@
 Main application file for the Appraisal AI Agent.
 """
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -11,7 +11,6 @@ import logging
 
 from app.core.config import settings
 from app.api.v1.api import api_router
-from app.web.controllers import router as web_router
 from app.db.init_db import init_db
 
 # Configure logging
@@ -46,8 +45,21 @@ app.add_middleware(
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Include web router for the Apeko website
-app.include_router(web_router)
+# Try to include web router for the website
+try:
+    from app.web.controllers import router as web_router
+    app.include_router(web_router)
+    logger.info("Web router included successfully")
+except ImportError as e:
+    logger.warning(f"Web router import failed: {e}. Creating a placeholder router.")
+    # Create a placeholder router if the web controllers are not available
+    web_router = APIRouter()
+    
+    @web_router.get("/")
+    async def web_root():
+        return {"message": "Web interface is not available in this deployment"}
+    
+    app.include_router(web_router)
 
 # Mount static files
 try:
