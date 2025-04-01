@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.api.v1.api import api_router
 from app.api.direct import router as direct_router
 from app.db.init_db import init_db
+from app.db.session import engine, SessionLocal
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -44,11 +45,19 @@ try:
     logger.info("Initializing database...")
     init_db()
     logger.info("Database initialized successfully.")
+except Exception as e:
+    logger.error(f"Error initializing database: {e}")
 
 # Run database migrations
 logger.info("Running database migrations...")
 try:
     from sqlalchemy import text
+    
+    # Get database URL from settings
+    DATABASE_URL = settings.DATABASE_URL
+    
+    # Create a database session
+    db = SessionLocal()
     
     # Check if we're using PostgreSQL
     if "postgresql" in DATABASE_URL:
@@ -120,12 +129,13 @@ try:
         except Exception as e:
             logger.error(f"Error during database migration: {e}")
             db.rollback()
+    else:
+        logger.info("Not using PostgreSQL, skipping database migration")
+    
+    # Close the database session
+    db.close()
 except Exception as e:
     logger.error(f"Failed to run database migrations: {e}")
-
-
-except Exception as e:
-    logger.error(f"Error initializing database: {e}")
 
 # Configure CORS
 app.add_middleware(
