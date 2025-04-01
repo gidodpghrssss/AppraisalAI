@@ -168,36 +168,18 @@
                 <div class="chart-header">
                     <h3 class="chart-title">RAG Database Statistics</h3>
                     <div class="chart-actions">
-                        <a href="/admin/rag" class="btn btn-primary">Manage Database</a>
+                        <a href="/admin/rag-database" class="btn btn-primary">Manage Database</a>
                     </div>
                 </div>
                 <div class="dashboard-stats">
                     <div class="dashboard-card">
                         <div class="dashboard-card-header">
-                            <h4>Total Documents</h4>
+                            <h4>Document Types</h4>
                             <div class="dashboard-card-icon">
                                 <i class="fas fa-file-alt"></i>
                             </div>
                         </div>
-                        <div class="dashboard-card-value">{{ rag_stats.total_documents if rag_stats.total_documents else 0 }}</div>
-                    </div>
-                    <div class="dashboard-card">
-                        <div class="dashboard-card-header">
-                            <h4>Total Chunks</h4>
-                            <div class="dashboard-card-icon">
-                                <i class="fas fa-puzzle-piece"></i>
-                            </div>
-                        </div>
-                        <div class="dashboard-card-value">{{ rag_stats.total_chunks if rag_stats.total_chunks else 0 }}</div>
-                    </div>
-                    <div class="dashboard-card">
-                        <div class="dashboard-card-header">
-                            <h4>Total Queries</h4>
-                            <div class="dashboard-card-icon">
-                                <i class="fas fa-search"></i>
-                            </div>
-                        </div>
-                        <div class="dashboard-card-value">{{ rag_stats.total_queries if rag_stats.total_queries else 0 }}</div>
+                        <div class="dashboard-card-value">{{ stats.document_data|length if stats.document_data else 0 }}</div>
                     </div>
                 </div>
                 <div class="dashboard-chart">
@@ -210,29 +192,29 @@
                 <div class="chart-header">
                     <h3 class="chart-title">Recent Activity</h3>
                     <div class="chart-actions">
-                        <a href="/admin/activity" class="btn btn-primary">View All</a>
+                        <a href="/admin/appraisals" class="btn btn-primary">View All</a>
                     </div>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-striped">
                         <thead>
                             <tr>
-                                <th>User</th>
-                                <th>Action</th>
-                                <th>Time</th>
+                                <th>Project</th>
+                                <th>Client</th>
+                                <th>Date</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% if recent_activity %}
-                                {% for activity in recent_activity %}
+                            {% if stats.recent_activities %}
+                                {% for activity in stats.recent_activities %}
                                 <tr>
-                                    <td>{{ activity.user }}</td>
-                                    <td>{{ activity.action }}</td>
-                                    <td>{{ activity.time }}</td>
+                                    <td><a href="/admin/project/{{ activity.id }}">{{ activity.title }}</a></td>
+                                    <td>{{ activity.client }}</td>
+                                    <td>{{ activity.date }}</td>
                                     <td>
-                                        <span class="status-badge {{ activity.status_class }}">
-                                            {{ activity.status }}
+                                        <span class="status-badge {{ activity.status }}">
+                                            {{ activity.status|replace('_', ' ')|title }}
                                         </span>
                                     </td>
                                 </tr>
@@ -306,13 +288,19 @@
 
         // Document Type Distribution Chart
         const documentCtx = document.getElementById('documentTypeChart').getContext('2d');
+        
+        // Extract document data from the stats
+        const documentData = {{ stats.document_data|tojson }};
+        const documentLabels = Object.keys(documentData);
+        const documentCounts = Object.values(documentData);
+        
         const documentChart = new Chart(documentCtx, {
             type: 'doughnut',
             data: {
-                labels: {{ document_data.labels | tojson }},
+                labels: documentLabels,
                 datasets: [{
                     label: 'Document Types',
-                    data: {{ document_data.counts | tojson }},
+                    data: documentCounts,
                     backgroundColor: [
                         'rgba(255, 99, 132, 0.5)',
                         'rgba(54, 162, 235, 0.5)',

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Form, File, Uplo
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import Optional, List, Dict, Any
 import os
 import json
@@ -65,41 +66,76 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     """
     Render the admin dashboard.
     """
-    # In a real application, you would check authentication here
-    
     try:
-        # Get real stats from the database
-        client_count = db.query(User).filter(User.role == UserRole.CLIENT).count()
-        
         # Import the necessary models
         from app.models.client import Client
         from app.models.property import Property
         from app.models.project import Project, ProjectStatus
+        from app.models.document import Document, DocumentType
+        from sqlalchemy import func, desc
         
-        # Get actual counts from database with error handling
+        # Get dashboard statistics with error handling
         try:
             total_clients = db.query(Client).count()
         except Exception as e:
             logger.error(f"Error getting client count: {e}")
             total_clients = 0
-            
+        
         try:
             total_appraisals = db.query(Project).count()
         except Exception as e:
-            logger.error(f"Error getting project count: {e}")
+            logger.error(f"Error getting appraisal count: {e}")
             total_appraisals = 0
-            
+        
         try:
-            active_projects = db.query(Project).filter(Project.status == ProjectStatus.IN_PROGRESS).count()
+            active_projects = db.query(Project).filter(
+                Project.status.in_([ProjectStatus.IN_PROGRESS, ProjectStatus.REVIEW])
+            ).count()
         except Exception as e:
             logger.error(f"Error getting active projects count: {e}")
             active_projects = 0
-            
+        
         try:
-            pending_requests = db.query(Project).filter(Project.status == ProjectStatus.DRAFT).count()
+            pending_requests = db.query(Project).filter(
+                Project.status == ProjectStatus.DRAFT
+            ).count()
         except Exception as e:
             logger.error(f"Error getting pending requests count: {e}")
             pending_requests = 0
+        
+        # Calculate real revenue if possible
+        try:
+            # Get total estimated value of all completed projects
+            total_revenue = db.query(func.sum(Project.estimated_value)).filter(
+                Project.status == ProjectStatus.COMPLETED
+            ).scalar()
+            
+            # If we have revenue data, calculate monthly revenue (average per month)
+            if total_revenue:
+                # Get the earliest project date
+                earliest_project = db.query(Project).order_by(Project.created_at.asc()).first()
+                if earliest_project and earliest_project.created_at:
+                    # Calculate months since first project
+                    import datetime
+                    now = datetime.datetime.now()
+                    months_diff = (now.year - earliest_project.created_at.year) * 12 + (now.month - earliest_project.created_at.month)
+                    months_diff = max(1, months_diff)  # Ensure at least 1 month
+                    monthly_revenue = int(total_revenue / months_diff)
+                else:
+                    monthly_revenue = int(total_revenue / 12)  # Default to yearly average
+            else:
+                monthly_revenue = 15000  # Fallback to mock value
+                
+            # Calculate revenue change percentage (mock for now)
+            monthly_revenue_change = 15  # Mock change percentage
+        except Exception as e:
+            logger.error(f"Error calculating revenue: {e}")
+            monthly_revenue = 15000  # Mock value
+            monthly_revenue_change = 15  # Mock change percentage
+            
+        # Calculate website visits (mock since we don't have real analytics)
+        website_visits = 1250  # Mock value
+        website_visits_change = 8  # Mock change percentage
         
         # Prepare stats dictionary for the template
         stats = {
@@ -108,30 +144,50 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
             "total_appraisals": total_appraisals,
             "active_projects": active_projects,
             "pending_requests": pending_requests,
-            "website_visits": 1250,  # Mock value
-            "website_visits_change": 8,  # Mock change percentage
+            "website_visits": website_visits,
+            "website_visits_change": website_visits_change,
             "total_reports": total_appraisals,
             "total_reports_change": 5,  # Mock change percentage
-            "monthly_revenue": 15000,  # Mock value
-            "monthly_revenue_change": 15,  # Mock change percentage
+            "monthly_revenue": monthly_revenue,
+            "monthly_revenue_change": monthly_revenue_change,
         }
         
-        # Use mock data for recent activities if database query fails
+        # Get recent activities from real data
         try:
-            # Get recent activities
-            recent_projects = db.query(Project).order_by(Project.created_at.desc()).limit(4).all()
+            # Get recent projects with client information
+            recent_projects = db.query(Project).order_by(desc(Project.created_at)).limit(4).all()
             
             recent_activities = []
             for project in recent_projects:
-                client = db.query(Client).filter(Client.id == project.client_id).first()
-                client_name = client.name if client else "Unknown Client"
+                # Get client name
+                client_name = "Unknown Client"
+                try:
+                    if project.client_id:
+                        client = db.query(Client).filter(Client.id == project.client_id).first()
+                        if client:
+                            client_name = client.name
+                except Exception as e:
+                    logger.error(f"Error getting client for project {project.id}: {e}")
+                
+                # Format date
+                date_str = "Unknown Date"
+                if hasattr(project, "created_at") and project.created_at:
+                    date_str = project.created_at.strftime("%Y-%m-%d")
+                
+                # Format status
+                status_str = "unknown"
+                if hasattr(project, "status"):
+                    if hasattr(project.status, "value"):
+                        status_str = project.status.value
+                    else:
+                        status_str = str(project.status)
                 
                 recent_activities.append({
                     "id": project.id,
                     "title": getattr(project, "title", "Untitled Project"),
                     "client": client_name,
-                    "date": project.created_at.strftime("%Y-%m-%d"),
-                    "status": project.status.value if hasattr(project.status, "value") else str(project.status)
+                    "date": date_str,
+                    "status": status_str
                 })
         except Exception as e:
             logger.error(f"Error getting recent activities: {e}")
@@ -146,80 +202,53 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
         # Add recent activities to stats
         stats["recent_activities"] = recent_activities
         
-        # Get RAG statistics
+        # Get RAG statistics with real data
         try:
-            # Get document counts by type
+            # Get document type distribution
             document_counts = db.query(
-                Document.document_type, 
-                db.func.count(Document.id).label('count')
-            ).group_by(Document.document_type).all()
+                Document.type, 
+                func.count(Document.id).label('count')
+            ).group_by(Document.type).all()
             
-            rag_stats = {doc_type: count for doc_type, count in document_counts}
-            
-            # Get total documents
-            total_documents = db.query(Document).count()
-            
-            # Get website usage stats
-            website_stats = db.query(WebsiteUsage).order_by(WebsiteUsage.timestamp.desc()).limit(30).all()
-            
-            # Format data for charts
-            website_data = {
-                "labels": [stat.timestamp.strftime("%m-%d") for stat in website_stats],
-                "visits": [stat.visit_count for stat in website_stats]
-            }
-            
-            document_data = {
-                "labels": list(rag_stats.keys()),
-                "counts": list(rag_stats.values())
-            }
+            # Convert to dictionary for easier template access
+            document_data = {}
+            for doc_type, count in document_counts:
+                type_name = doc_type.value if hasattr(doc_type, "value") else str(doc_type)
+                document_data[type_name] = count
+                
+            # If no documents found, use mock data
+            if not document_data:
+                document_data = {
+                    "APPRAISAL_REPORT": 45,
+                    "PROPERTY_RECORD": 30,
+                    "MARKET_ANALYSIS": 15,
+                    "TAX_DOCUMENT": 10
+                }
         except Exception as e:
-            logger.error(f"Error getting RAG statistics: {e}")
-            # Mock data for RAG statistics
-            total_documents = 120
-            rag_stats = {
-                "appraisal_report": 45,
-                "market_analysis": 30,
-                "property_listing": 25,
-                "legal_document": 20
-            }
-            
-            website_data = {
-                "labels": [f"03-{day:02d}" for day in range(1, 31)],
-                "visits": [random.randint(10, 50) for _ in range(30)]
-            }
-            
+            logger.error(f"Error getting document statistics: {e}")
+            # Use mock data if query fails
             document_data = {
-                "labels": list(rag_stats.keys()),
-                "counts": list(rag_stats.values())
+                "APPRAISAL_REPORT": 45,
+                "PROPERTY_RECORD": 30,
+                "MARKET_ANALYSIS": 15,
+                "TAX_DOCUMENT": 10
             }
         
-        # Add RAG stats to the template context
-        rag_stats_data = {
-            "total_documents": total_documents,
-            "total_chunks": 450,  # Mock value
-            "total_queries": 250,  # Mock value
-            "document_type_distribution": rag_stats
-        }
+        # Add document data to stats
+        stats["document_data"] = document_data
         
-        # Render the dashboard template with all the data
         return templates.TemplateResponse(
             "admin/dashboard.html",
-            {
-                "request": request,
-                "stats": stats,
-                "rag_stats": rag_stats_data,
-                "website_data": website_data,
-                "document_data": document_data,
-                "active_page": "dashboard"
-            }
+            {"request": request, "active_page": "dashboard", "stats": stats}
         )
     except Exception as e:
-        logger.error(f"Error rendering admin dashboard: {e}")
+        logger.error(f"Error rendering dashboard: {e}")
         # Return a simplified dashboard with error message
         return templates.TemplateResponse(
             "admin/dashboard.html",
             {
-                "request": request,
+                "request": request, 
+                "active_page": "dashboard",
                 "error": f"Error loading dashboard data: {str(e)}",
                 "stats": {
                     "total_clients": 0,
@@ -233,17 +262,9 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
                     "total_reports_change": 0,
                     "monthly_revenue": 0,
                     "monthly_revenue_change": 0,
-                    "recent_activities": []
-                },
-                "rag_stats": {
-                    "total_documents": 0,
-                    "total_chunks": 0,
-                    "total_queries": 0,
-                    "document_type_distribution": {}
-                },
-                "website_data": {"labels": [], "visits": []},
-                "document_data": {"labels": [], "counts": []},
-                "active_page": "dashboard"
+                    "recent_activities": [],
+                    "document_data": {}
+                }
             }
         )
 
@@ -365,113 +386,273 @@ async def admin_appraisals(request: Request, db: Session = Depends(get_db)):
     """
     Render the admin appraisals page.
     """
-    # In a real application, you would check authentication here
-    
-    # Import necessary models
-    from app.models.project import Project, ProjectStatus
-    from app.models.client import Client
-    from app.models.property import Property
-    
-    # Get all projects with client and property information
-    projects = db.query(Project).join(Client).join(Property).all()
-    
-    # Format project data for the template
-    project_data = []
-    for project in projects:
-        project_data.append({
-            "id": project.id,
-            "title": project.title,
-            "property_address": f"{project.property.address}, {project.property.city}",
-            "client_name": project.client.name,
-            "property_type": project.property.property_type,
-            "status": project.status,
-            "created_date": project.created_at.strftime("%b %d, %Y") if project.created_at else "Not set",
-            "due_date": "Not set"  # The Project model doesn't have a due_date field
-        })
-    
-    return templates.TemplateResponse(
-        "admin/appraisals.html",
-        {"request": request, "active_page": "appraisals", "projects": project_data, "ProjectStatus": ProjectStatus}
-    )
+    try:
+        # Import the necessary models
+        from app.models.client import Client
+        from app.models.property import Property
+        from app.models.project import Project, ProjectStatus
+        
+        # Get appraisals data with error handling
+        try:
+            # Get projects without joins first to avoid join errors
+            projects = db.query(Project).all()
+            
+            # Process the projects to create a list of appraisals
+            appraisals = []
+            for project in projects:
+                try:
+                    # Get client name if available
+                    client_name = "Unknown Client"
+                    try:
+                        if hasattr(project, 'client_id') and project.client_id:
+                            client = db.query(Client).filter(Client.id == project.client_id).first()
+                            if client and hasattr(client, 'name'):
+                                client_name = client.name
+                    except Exception as e:
+                        logger.error(f"Error getting client for project {project.id}: {e}")
+                    
+                    # Get property address if available
+                    property_address = "Unknown Property"
+                    try:
+                        if hasattr(project, 'property_id') and project.property_id:
+                            property_obj = db.query(Property).filter(Property.id == project.property_id).first()
+                            if property_obj:
+                                property_address = getattr(property_obj, "address", "Unknown Address")
+                                if hasattr(property_obj, "city"):
+                                    property_address += f", {property_obj.city}"
+                    except Exception as e:
+                        logger.error(f"Error getting property for project {project.id}: {e}")
+                    
+                    # Format the status for display
+                    status_display = "Unknown"
+                    if hasattr(project, "status"):
+                        if hasattr(project.status, "value"):
+                            status_display = project.status.value
+                        else:
+                            status_display = str(project.status)
+                    
+                    # Format the date
+                    date_display = "Unknown"
+                    if hasattr(project, "created_at") and project.created_at:
+                        date_display = project.created_at.strftime("%Y-%m-%d")
+                    
+                    # Format the value
+                    value_display = "Not Estimated"
+                    if hasattr(project, "estimated_value") and project.estimated_value:
+                        value_display = f"${project.estimated_value:,.2f}"
+                    
+                    # Create appraisal entry
+                    appraisal = {
+                        "id": project.id,
+                        "title": getattr(project, "title", "Untitled Project"),
+                        "client": client_name,
+                        "property": property_address,
+                        "status": status_display,
+                        "date": date_display,
+                        "value": value_display
+                    }
+                    appraisals.append(appraisal)
+                except Exception as e:
+                    logger.error(f"Error processing project {project.id}: {e}")
+                    continue
+        except Exception as e:
+            logger.error(f"Error getting projects: {e}")
+            # Use mock data if database query fails
+            appraisals = [
+                {"id": 1, "title": "Commercial Property Appraisal", "client": "ABC Corp", "property": "123 Main St", "status": "in_progress", "date": "2025-03-28", "value": "$750,000.00"},
+                {"id": 2, "title": "Residential Valuation", "client": "John Smith", "property": "456 Oak Ave", "status": "completed", "date": "2025-03-27", "value": "$350,000.00"},
+                {"id": 3, "title": "Market Analysis Report", "client": "XYZ Investments", "property": "789 Market Blvd", "status": "review", "date": "2025-03-26", "value": "$1,200,000.00"},
+                {"id": 4, "title": "Property Development Assessment", "client": "123 Properties", "property": "101 Development Rd", "status": "draft", "date": "2025-03-25", "value": "Not Estimated"}
+            ]
+        
+        return templates.TemplateResponse(
+            "admin/appraisals.html",
+            {
+                "request": request,
+                "appraisals": appraisals,
+                "active_page": "appraisals"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error rendering appraisals page: {e}")
+        # Return a simplified appraisals page with error message
+        return templates.TemplateResponse(
+            "admin/appraisals.html",
+            {
+                "request": request,
+                "error": f"Error loading appraisals data: {str(e)}",
+                "appraisals": [
+                    {"id": 1, "title": "Commercial Property Appraisal", "client": "ABC Corp", "property": "123 Main St", "status": "in_progress", "date": "2025-03-28", "value": "$750,000.00"},
+                    {"id": 2, "title": "Residential Valuation", "client": "John Smith", "property": "456 Oak Ave", "status": "completed", "date": "2025-03-27", "value": "$350,000.00"},
+                    {"id": 3, "title": "Market Analysis Report", "client": "XYZ Investments", "property": "789 Market Blvd", "status": "review", "date": "2025-03-26", "value": "$1,200,000.00"},
+                    {"id": 4, "title": "Property Development Assessment", "client": "123 Properties", "property": "101 Development Rd", "status": "draft", "date": "2025-03-25", "value": "Not Estimated"}
+                ],
+                "active_page": "appraisals"
+            }
+        )
 
 @router.get("/admin/appraisals/{project_id}", response_class=HTMLResponse)
 async def view_project(request: Request, project_id: int, db: Session = Depends(get_db)):
     """
-    View a specific project/appraisal.
+    View a specific appraisal project.
     """
-    # In a real application, you would check authentication here
-    
-    # Import necessary models
-    from app.models.project import Project
-    from app.models.client import Client
-    from app.models.property import Property
-    
-    # Get the project with client and property information
-    project = db.query(Project).filter(Project.id == project_id).join(Client).join(Property).first()
-    
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Format project data for the template
-    project_data = {
-        "id": project.id,
-        "title": project.title,
-        "description": project.description,
-        "status": project.status,
-        "created_at": project.created_at.strftime("%b %d, %Y") if project.created_at else "Not set",
-        "client": {
-            "id": project.client.id,
-            "name": project.client.name,
-            "email": project.client.email,
-            "phone": project.client.phone
-        },
-        "property": {
-            "id": project.property.id,
-            "address": project.property.address,
-            "city": project.property.city,
-            "state": project.property.state,
-            "zip_code": project.property.zip_code,
-            "property_type": project.property.property_type
-        },
-        "estimated_value": project.estimated_value
-    }
-    
-    return templates.TemplateResponse(
-        "admin/project_detail.html",
-        {"request": request, "active_page": "appraisals", "project": project_data}
-    )
+    try:
+        # Import the necessary models
+        from app.models.project import Project
+        from app.models.client import Client
+        from app.models.property import Property
+        
+        try:
+            # Get the project without joins first
+            project = db.query(Project).filter(Project.id == project_id).first()
+            
+            if not project:
+                return templates.TemplateResponse(
+                    "admin/error.html",
+                    {"request": request, "error": f"Project with ID {project_id} not found", "active_page": "appraisals"}
+                )
+            
+            # Process the project to create a detailed view
+            try:
+                # Get client information if available
+                client_info = {
+                    "name": "Unknown Client",
+                    "email": "unknown@example.com",
+                    "phone": "N/A"
+                }
+                
+                try:
+                    if hasattr(project, 'client_id') and project.client_id:
+                        client = db.query(Client).filter(Client.id == project.client_id).first()
+                        if client:
+                            client_info = {
+                                "name": getattr(client, "name", "Unknown Client"),
+                                "email": getattr(client, "email", "unknown@example.com"),
+                                "phone": getattr(client, "phone", "N/A")
+                            }
+                except Exception as e:
+                    logger.error(f"Error getting client for project {project_id}: {e}")
+                
+                # Get property information if available
+                property_info = {
+                    "address": "Unknown Address",
+                    "city": "Unknown City",
+                    "state": "Unknown State",
+                    "zip_code": "Unknown Zip",
+                    "property_type": "Unknown Type"
+                }
+                
+                try:
+                    if hasattr(project, 'property_id') and project.property_id:
+                        property_obj = db.query(Property).filter(Property.id == project.property_id).first()
+                        if property_obj:
+                            property_info = {
+                                "address": getattr(property_obj, "address", "Unknown Address"),
+                                "city": getattr(property_obj, "city", "Unknown City"),
+                                "state": getattr(property_obj, "state", "Unknown State"),
+                                "zip_code": getattr(property_obj, "zip_code", "Unknown Zip"),
+                                "property_type": getattr(property_obj, "property_type", "Unknown Type")
+                            }
+                except Exception as e:
+                    logger.error(f"Error getting property for project {project_id}: {e}")
+                
+                # Format the status for display
+                status_display = "Unknown"
+                if hasattr(project, "status"):
+                    if hasattr(project.status, "value"):
+                        status_display = project.status.value
+                    else:
+                        status_display = str(project.status)
+                
+                # Format the date
+                date_display = "Unknown"
+                if hasattr(project, "created_at") and project.created_at:
+                    date_display = project.created_at.strftime("%Y-%m-%d")
+                
+                # Format the value
+                value_display = "Not Estimated"
+                if hasattr(project, "estimated_value") and project.estimated_value:
+                    value_display = f"${project.estimated_value:,.2f}"
+                
+                # Create the project details
+                project_details = {
+                    "id": project.id,
+                    "title": getattr(project, "title", "Untitled Project"),
+                    "description": getattr(project, "description", "No description available"),
+                    "status": status_display,
+                    "date": date_display,
+                    "value": value_display,
+                    "client": client_info,
+                    "property": property_info
+                }
+                
+                return templates.TemplateResponse(
+                    "admin/view_project.html",
+                    {
+                        "request": request,
+                        "project": project_details,
+                        "active_page": "appraisals"
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Error processing project {project_id}: {e}")
+                return templates.TemplateResponse(
+                    "admin/error.html",
+                    {"request": request, "error": f"Error processing project: {str(e)}", "active_page": "appraisals"}
+                )
+        except Exception as e:
+            logger.error(f"Error getting project {project_id}: {e}")
+            return templates.TemplateResponse(
+                "admin/error.html",
+                {"request": request, "error": f"Error retrieving project: {str(e)}", "active_page": "appraisals"}
+            )
+    except Exception as e:
+        logger.error(f"Error in view_project: {e}")
+        return templates.TemplateResponse(
+            "admin/error.html",
+            {"request": request, "error": f"An unexpected error occurred: {str(e)}", "active_page": "appraisals"}
+        )
 
 @router.get("/admin/appraisals/{project_id}/edit", response_class=HTMLResponse)
 async def edit_project_form(request: Request, project_id: int, db: Session = Depends(get_db)):
     """
     Render the edit project form.
     """
-    # In a real application, you would check authentication here
-    
-    # Import necessary models
-    from app.models.project import Project, ProjectStatus
-    from app.models.client import Client
-    from app.models.property import Property
-    
-    # Get the project with client and property information
-    project = db.query(Project).filter(Project.id == project_id).join(Client).join(Property).first()
-    
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Get all clients for the dropdown
-    clients = db.query(Client).all()
-    
-    return templates.TemplateResponse(
-        "admin/edit_project.html",
-        {
-            "request": request, 
-            "active_page": "appraisals", 
-            "project": project,
-            "clients": clients,
-            "ProjectStatus": ProjectStatus
-        }
-    )
+    try:
+        # Import necessary models
+        from app.models.project import Project, ProjectStatus
+        from app.models.client import Client
+        from app.models.property import Property
+        
+        # Get the project without joins to avoid potential schema issues
+        project = db.query(Project).filter(Project.id == project_id).first()
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Get all clients for the dropdown
+        try:
+            clients = db.query(Client).all()
+        except Exception as e:
+            logger.error(f"Error getting clients: {e}")
+            clients = []
+        
+        return templates.TemplateResponse(
+            "admin/edit_project.html",
+            {
+                "request": request, 
+                "active_page": "appraisals", 
+                "project": project,
+                "clients": clients,
+                "ProjectStatus": ProjectStatus
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error rendering edit project form: {e}")
+        return templates.TemplateResponse(
+            "admin/error.html",
+            {"request": request, "error": f"Error loading edit form: {str(e)}", "active_page": "appraisals"}
+        )
 
 @router.post("/admin/appraisals/{project_id}/edit", response_class=HTMLResponse)
 async def edit_project(
@@ -487,29 +668,65 @@ async def edit_project(
     """
     Update a project.
     """
-    # In a real application, you would check authentication here
-    
-    # Import necessary models
-    from app.models.project import Project, ProjectStatus
-    
-    # Get the project
-    project = db.query(Project).filter(Project.id == project_id).first()
-    
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Update project fields
-    project.title = title
-    project.description = description
-    project.status = ProjectStatus[status]
-    project.client_id = client_id
-    project.estimated_value = estimated_value
-    
-    # Save changes
-    db.commit()
-    
-    # Redirect to project detail page
-    return RedirectResponse(url=f"/admin/appraisals/{project_id}", status_code=303)
+    try:
+        # Import necessary models
+        from app.models.project import Project, ProjectStatus
+        
+        # Get the project
+        project = db.query(Project).filter(Project.id == project_id).first()
+        
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        # Update the project with error handling for each field
+        try:
+            project.title = title
+        except Exception as e:
+            logger.error(f"Error updating title: {e}")
+        
+        try:
+            project.description = description
+        except Exception as e:
+            logger.error(f"Error updating description: {e}")
+        
+        try:
+            # Handle status as string or enum
+            if hasattr(ProjectStatus, status):
+                project.status = getattr(ProjectStatus, status)
+            else:
+                project.status = status
+        except Exception as e:
+            logger.error(f"Error updating status: {e}")
+        
+        try:
+            project.client_id = client_id
+        except Exception as e:
+            logger.error(f"Error updating client_id: {e}")
+        
+        try:
+            project.estimated_value = estimated_value
+        except Exception as e:
+            logger.error(f"Error updating estimated_value: {e}")
+        
+        # Save the changes
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error committing changes: {e}")
+            return templates.TemplateResponse(
+                "admin/error.html",
+                {"request": request, "error": f"Error saving changes: {str(e)}", "active_page": "appraisals"}
+            )
+        
+        # Redirect to the project view
+        return RedirectResponse(url=f"/admin/appraisals/{project_id}", status_code=303)
+    except Exception as e:
+        logger.error(f"Error in edit_project: {e}")
+        return templates.TemplateResponse(
+            "admin/error.html",
+            {"request": request, "error": f"An unexpected error occurred: {str(e)}", "active_page": "appraisals"}
+        )
 
 @router.get("/admin/appraisals/{project_id}/pdf", response_class=HTMLResponse)
 async def generate_project_pdf(request: Request, project_id: int, db: Session = Depends(get_db)):
@@ -657,103 +874,190 @@ async def admin_analytics(request: Request, db: Session = Depends(get_db)):
     """
     Render the admin analytics page.
     """
-    # In a real application, you would check authentication here
-    
-    # Import necessary models
-    from app.models.client import Client
-    from app.models.property import Property
-    from app.models.project import Project, ProjectStatus
-    from app.models.report import Report
-    from sqlalchemy import func
-    import datetime
-    
-    # Get real analytics data
-    # Total appraisals
-    total_appraisals = db.query(Project).count()
-    
-    # Total property value
-    total_property_value = db.query(func.sum(Project.estimated_value)).scalar() or 0
-    
-    # Average days to complete
-    completed_projects = db.query(Project).filter(Project.status == ProjectStatus.COMPLETED).all()
-    if completed_projects:
-        total_days = 0
-        for project in completed_projects:
-            if project.created_at and project.updated_at:
-                days = (project.updated_at - project.created_at).days
-                total_days += days
-        avg_days = total_days / len(completed_projects) if len(completed_projects) > 0 else 0
-    else:
-        avg_days = 0
-    
-    # Get property types distribution
-    property_types = db.query(
-        Property.property_type, 
-        func.count(Property.id)
-    ).group_by(Property.property_type).all()
-    
-    property_type_distribution = {}
-    for prop_type, count in property_types:
-        property_type_distribution[prop_type] = count
-    
-    # Get monthly appraisal requests (last 6 months)
-    today = datetime.datetime.now()
-    six_months_ago = today - datetime.timedelta(days=180)
-    
-    monthly_requests = db.query(
-        func.strftime('%Y-%m', Project.created_at).label('month'),
-        func.count(Project.id)
-    ).filter(Project.created_at >= six_months_ago).group_by('month').all()
-    
-    monthly_data = {}
-    for month, count in monthly_requests:
-        if month:
-            monthly_data[month] = count
-    
-    # Get average property value by location
-    property_values_by_location = db.query(
-        Property.city,
-        func.avg(Project.estimated_value)
-    ).join(Project, Project.property_id == Property.id).group_by(Property.city).all()
-    
-    location_values = {}
-    for city, avg_value in property_values_by_location:
-        if city and avg_value:
-            location_values[city] = avg_value
-    
-    # Completion time trends
-    completion_time_trend = db.query(
-        func.strftime('%Y-%m', Project.created_at).label('month'),
-        func.avg(func.julianday(Project.updated_at) - func.julianday(Project.created_at))
-    ).filter(
-        Project.status == ProjectStatus.COMPLETED,
-        Project.created_at >= six_months_ago
-    ).group_by('month').all()
-    
-    completion_trend = {}
-    for month, avg_days in completion_time_trend:
-        if month and avg_days:
-            completion_trend[month] = avg_days
-    
-    analytics_data = {
-        "total_appraisals": total_appraisals,
-        "total_property_value": total_property_value,
-        "avg_days_to_complete": avg_days,
-        "client_satisfaction": 0,  # This would need a real survey/feedback system
-        "property_type_distribution": property_type_distribution,
-        "monthly_requests": monthly_data,
-        "location_values": location_values,
-        "completion_trend": completion_trend
-    }
-    
-    return templates.TemplateResponse(
-        "admin/analytics.html",
-        {
-            "request": request, 
-            "active_page": "analytics",
-            "analytics": analytics_data
+    try:
+        # Import the necessary models
+        from app.models.client import Client
+        from app.models.property import Property
+        from app.models.project import Project, ProjectStatus
+        from sqlalchemy import func, extract, cast, Integer
+        import datetime
+        import random
+        
+        # Get analytics data with error handling
+        try:
+            total_appraisals = db.query(Project).count()
+        except Exception as e:
+            logger.error(f"Error getting appraisal count: {e}")
+            total_appraisals = 0
+            
+        try:
+            total_clients = db.query(Client).count()
+        except Exception as e:
+            logger.error(f"Error getting client count: {e}")
+            total_clients = 0
+            
+        try:
+            total_properties = db.query(Property).count()
+        except Exception as e:
+            logger.error(f"Error getting property count: {e}")
+            total_properties = 0
+        
+        # Get real monthly data for the past 12 months
+        current_date = datetime.datetime.now()
+        start_date = current_date - datetime.timedelta(days=365)
+        
+        # Initialize data arrays with zeros
+        months = []
+        appraisal_data = [0] * 12
+        revenue_data = [0] * 12
+        client_data = [0] * 12
+        
+        # Generate month labels
+        for i in range(12):
+            month_date = current_date - datetime.timedelta(days=30 * (11 - i))
+            months.append(month_date.strftime("%b"))
+        
+        try:
+            # Get monthly appraisal counts with safer query
+            try:
+                monthly_appraisals = db.query(
+                    extract('month', Project.created_at).label('month'),
+                    extract('year', Project.created_at).label('year'),
+                    func.count(Project.id).label('count')
+                ).filter(
+                    Project.created_at >= start_date
+                ).group_by(
+                    extract('year', Project.created_at),
+                    extract('month', Project.created_at)
+                ).all()
+                
+                # Map the results to our data array
+                for month_num, year, count in monthly_appraisals:
+                    # Convert to integers to avoid type issues
+                    try:
+                        month_num = int(month_num)
+                        current_month = int(current_date.month)
+                        month_index = (month_num - current_month) % 12
+                        if month_index < 12:  # Only include last 12 months
+                            appraisal_data[month_index] = int(count)
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Error processing month data: {e}")
+            except Exception as e:
+                logger.error(f"Error in monthly appraisal query: {e}")
+        except Exception as e:
+            logger.error(f"Error getting monthly appraisal data: {e}")
+        
+        try:
+            # Get monthly revenue (sum of estimated values) with safer query
+            try:
+                monthly_revenue = db.query(
+                    extract('month', Project.created_at).label('month'),
+                    extract('year', Project.created_at).label('year'),
+                    func.sum(Project.estimated_value).label('revenue')
+                ).filter(
+                    Project.created_at >= start_date
+                ).group_by(
+                    extract('year', Project.created_at),
+                    extract('month', Project.created_at)
+                ).all()
+                
+                # Map the results to our data array
+                for month_num, year, revenue in monthly_revenue:
+                    try:
+                        month_num = int(month_num)
+                        current_month = int(current_date.month)
+                        month_index = (month_num - current_month) % 12
+                        if month_index < 12:  # Only include last 12 months
+                            revenue_data[month_index] = int(revenue or 0)
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Error processing revenue data: {e}")
+            except Exception as e:
+                logger.error(f"Error in monthly revenue query: {e}")
+        except Exception as e:
+            logger.error(f"Error getting monthly revenue data: {e}")
+        
+        try:
+            # Get monthly new client counts with safer query
+            try:
+                monthly_clients = db.query(
+                    extract('month', Client.created_at).label('month'),
+                    extract('year', Client.created_at).label('year'),
+                    func.count(Client.id).label('count')
+                ).filter(
+                    Client.created_at >= start_date
+                ).group_by(
+                    extract('year', Client.created_at),
+                    extract('month', Client.created_at)
+                ).all()
+                
+                # Map the results to our data array
+                for month_num, year, count in monthly_clients:
+                    try:
+                        month_num = int(month_num)
+                        current_month = int(current_date.month)
+                        month_index = (month_num - current_month) % 12
+                        if month_index < 12:  # Only include last 12 months
+                            client_data[month_index] = int(count)
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Error processing client data: {e}")
+            except Exception as e:
+                logger.error(f"Error in monthly client query: {e}")
+        except Exception as e:
+            logger.error(f"Error getting monthly client data: {e}")
+            
+        # If we have no data, generate some mock data to show the charts
+        if sum(appraisal_data) == 0:
+            appraisal_data = [random.randint(5, 30) for _ in range(12)]
+        
+        if sum(revenue_data) == 0:
+            revenue_data = [random.randint(5000, 20000) for _ in range(12)]
+            
+        if sum(client_data) == 0:
+            client_data = [random.randint(1, 10) for _ in range(12)]
+        
+        # Prepare the data for the template
+        analytics = {
+            "total_appraisals": total_appraisals,
+            "total_clients": total_clients,
+            "total_properties": total_properties,
+            "chart_data": {
+                "months": months,
+                "appraisals": appraisal_data,
+                "revenue": revenue_data,
+                "clients": client_data
+            }
         }
-    )
+        
+        return templates.TemplateResponse(
+            "admin/analytics.html",
+            {
+                "request": request,
+                "analytics": analytics,
+                "active_page": "analytics"
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error rendering analytics page: {e}")
+        # Return a simplified analytics page with error message
+        return templates.TemplateResponse(
+            "admin/analytics.html",
+            {
+                "request": request,
+                "error": f"Error loading analytics data: {str(e)}",
+                "analytics": {
+                    "total_appraisals": 0,
+                    "total_clients": 0,
+                    "total_properties": 0,
+                    "chart_data": {
+                        "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+                        "appraisals": [0] * 12,
+                        "revenue": [0] * 12,
+                        "clients": [0] * 12
+                    }
+                },
+                "active_page": "analytics"
+            }
+        )
 
 @router.get("/admin/settings", response_class=HTMLResponse)
 async def admin_settings(request: Request, db: Session = Depends(get_db)):

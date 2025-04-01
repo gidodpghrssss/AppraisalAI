@@ -95,11 +95,26 @@
     .data-table tr:hover {
         background-color: #f9f9f9;
     }
+    
+    .error-message {
+        background-color: #ffebee;
+        color: #c62828;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        border-left: 4px solid #c62828;
+    }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 {% endblock %}
 
 {% block content %}
+{% if error %}
+<div class="error-message">
+    <strong>Error:</strong> {{ error }}
+</div>
+{% endif %}
+
 <div class="analytics-filters">
     <select class="analytics-filter">
         <option value="30">Last 30 Days</option>
@@ -125,296 +140,146 @@
     </div>
     
     <div class="metric-card">
-        <div class="metric-value">${{ '{:.1f}'.format(analytics.total_property_value / 1000000) }}M</div>
-        <div class="metric-label">Total Property Value</div>
+        <div class="metric-value">{{ analytics.total_clients }}</div>
+        <div class="metric-label">Total Clients</div>
     </div>
     
     <div class="metric-card">
-        <div class="metric-value">{{ '{:.1f}'.format(analytics.avg_days_to_complete) }}</div>
-        <div class="metric-label">Avg. Days to Complete</div>
-    </div>
-    
-    <div class="metric-card">
-        <div class="metric-value">{{ analytics.client_satisfaction }}%</div>
-        <div class="metric-label">Client Satisfaction</div>
+        <div class="metric-value">{{ analytics.total_properties }}</div>
+        <div class="metric-label">Total Properties</div>
     </div>
 </div>
 
 <div class="analytics-container">
     <div class="analytics-card">
         <div class="analytics-header">
-            <h3 class="analytics-title">Appraisals by Property Type</h3>
+            <h3 class="analytics-title">Monthly Appraisal Trends</h3>
             <div class="analytics-actions">
                 <button class="btn btn-sm btn-secondary"><i class="fas fa-download"></i> Export</button>
             </div>
         </div>
         <div class="chart-container">
-            <canvas id="propertyTypeChart"></canvas>
+            <canvas id="appraisalTrendsChart"></canvas>
         </div>
     </div>
     
     <div class="analytics-card">
         <div class="analytics-header">
-            <h3 class="analytics-title">Monthly Appraisal Requests</h3>
+            <h3 class="analytics-title">Monthly Revenue</h3>
             <div class="analytics-actions">
                 <button class="btn btn-sm btn-secondary"><i class="fas fa-download"></i> Export</button>
             </div>
         </div>
         <div class="chart-container">
-            <canvas id="monthlyRequestsChart"></canvas>
+            <canvas id="revenueChart"></canvas>
         </div>
     </div>
     
     <div class="analytics-card">
         <div class="analytics-header">
-            <h3 class="analytics-title">Average Property Value by Location</h3>
+            <h3 class="analytics-title">New Clients</h3>
             <div class="analytics-actions">
                 <button class="btn btn-sm btn-secondary"><i class="fas fa-download"></i> Export</button>
             </div>
         </div>
         <div class="chart-container">
-            <canvas id="valueByLocationChart"></canvas>
-        </div>
-    </div>
-    
-    <div class="analytics-card">
-        <div class="analytics-header">
-            <h3 class="analytics-title">Completion Time Trends</h3>
-            <div class="analytics-actions">
-                <button class="btn btn-sm btn-secondary"><i class="fas fa-download"></i> Export</button>
-            </div>
-        </div>
-        <div class="chart-container">
-            <canvas id="completionTimeChart"></canvas>
+            <canvas id="clientsChart"></canvas>
         </div>
     </div>
 </div>
 
-<div class="analytics-card">
-    <div class="analytics-header">
-        <h3 class="analytics-title">Recent Appraisals</h3>
-        <div class="analytics-actions">
-            <button class="btn btn-sm btn-secondary"><i class="fas fa-download"></i> Export CSV</button>
-        </div>
-    </div>
-    <div class="table-responsive">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Property</th>
-                    <th>Type</th>
-                    <th>Client</th>
-                    <th>Appraiser</th>
-                    <th>Value</th>
-                    <th>Completion Date</th>
-                    <th>Days to Complete</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>APR-2025-045</td>
-                    <td>123 Main St, Anytown</td>
-                    <td>Residential</td>
-                    <td>John Smith</td>
-                    <td>Sarah Johnson</td>
-                    <td>$425,000</td>
-                    <td>Mar 28, 2025</td>
-                    <td>14</td>
-                </tr>
-                <tr>
-                    <td>APR-2025-044</td>
-                    <td>456 Oak Ave, Somewhere</td>
-                    <td>Commercial</td>
-                    <td>XYZ Properties</td>
-                    <td>Michael Brown</td>
-                    <td>$2,150,000</td>
-                    <td>Mar 27, 2025</td>
-                    <td>21</td>
-                </tr>
-                <tr>
-                    <td>APR-2025-043</td>
-                    <td>789 Pine Blvd, Elsewhere</td>
-                    <td>Land</td>
-                    <td>ABC Developers</td>
-                    <td>Emily Davis</td>
-                    <td>$850,000</td>
-                    <td>Mar 26, 2025</td>
-                    <td>18</td>
-                </tr>
-                <tr>
-                    <td>APR-2025-042</td>
-                    <td>101 Maple Dr, Anytown</td>
-                    <td>Residential</td>
-                    <td>Jane Doe</td>
-                    <td>Sarah Johnson</td>
-                    <td>$375,000</td>
-                    <td>Mar 25, 2025</td>
-                    <td>12</td>
-                </tr>
-                <tr>
-                    <td>APR-2025-041</td>
-                    <td>202 Cedar Ln, Somewhere</td>
-                    <td>Residential</td>
-                    <td>Robert Johnson</td>
-                    <td>Michael Brown</td>
-                    <td>$520,000</td>
-                    <td>Mar 24, 2025</td>
-                    <td>15</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Property Type Chart
-        const propertyTypeCtx = document.getElementById('propertyTypeChart').getContext('2d');
-        
-        // Get property type data from the server
-        const propertyTypeLabels = [];
-        const propertyTypeData = [];
-        
-        {% for prop_type, count in analytics.property_type_distribution.items() %}
-            propertyTypeLabels.push('{{ prop_type }}');
-            propertyTypeData.push({{ count }});
-        {% endfor %}
-        
-        const propertyTypeChart = new Chart(propertyTypeCtx, {
-            type: 'pie',
-            data: {
-                labels: propertyTypeLabels.length > 0 ? propertyTypeLabels : ['No Data'],
-                datasets: [{
-                    data: propertyTypeData.length > 0 ? propertyTypeData : [1],
-                    backgroundColor: ['#9d0208', '#d00000', '#dc2f02', '#e85d04', '#f48c06'],
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'right'
+document.addEventListener('DOMContentLoaded', function() {
+    // Get chart data from the template
+    const months = {{ analytics.chart_data.months|tojson }};
+    const appraisalData = {{ analytics.chart_data.appraisals|tojson }};
+    const revenueData = {{ analytics.chart_data.revenue|tojson }};
+    const clientData = {{ analytics.chart_data.clients|tojson }};
+    
+    // Appraisal Trends Chart
+    const appraisalTrendsCtx = document.getElementById('appraisalTrendsChart').getContext('2d');
+    new Chart(appraisalTrendsCtx, {
+        type: 'line',
+        data: {
+            labels: months,
+            datasets: [{
+                label: 'Appraisals',
+                data: appraisalData,
+                backgroundColor: 'rgba(157, 2, 8, 0.2)',
+                borderColor: 'rgba(157, 2, 8, 1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
                     }
                 }
             }
-        });
-        
-        // Monthly Requests Chart
-        const monthlyRequestsCtx = document.getElementById('monthlyRequestsChart').getContext('2d');
-        
-        // Get monthly data from the server
-        const monthlyLabels = [];
-        const monthlyData = [];
-        
-        {% for month, count in analytics.monthly_requests.items() %}
-            // Format month from YYYY-MM to MMM
-            const monthDate = new Date('{{ month }}-01');
-            const monthName = monthDate.toLocaleString('default', { month: 'short' });
-            monthlyLabels.push(monthName);
-            monthlyData.push({{ count }});
-        {% endfor %}
-        
-        const monthlyRequestsChart = new Chart(monthlyRequestsCtx, {
-            type: 'bar',
-            data: {
-                labels: monthlyLabels.length > 0 ? monthlyLabels : ['No Data'],
-                datasets: [{
-                    label: 'Appraisal Requests',
-                    data: monthlyData.length > 0 ? monthlyData : [0],
-                    backgroundColor: '#9d0208',
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-        
-        // Value by Location Chart
-        const valueByLocationCtx = document.getElementById('valueByLocationChart').getContext('2d');
-        
-        // Get location data from the server
-        const locationLabels = [];
-        const locationData = [];
-        
-        {% for city, value in analytics.location_values.items() %}
-            locationLabels.push('{{ city }}');
-            // Convert to thousands
-            locationData.push({{ value / 1000 }});
-        {% endfor %}
-        
-        const valueByLocationChart = new Chart(valueByLocationCtx, {
-            type: 'bar',
-            data: {
-                labels: locationLabels.length > 0 ? locationLabels : ['No Data'],
-                datasets: [{
-                    label: 'Average Property Value ($K)',
-                    data: locationData.length > 0 ? locationData : [0],
-                    backgroundColor: '#9d0208',
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
-        
-        // Completion Time Chart
-        const completionTimeCtx = document.getElementById('completionTimeChart').getContext('2d');
-        
-        // Get completion time data from the server
-        const completionLabels = [];
-        const completionData = [];
-        
-        {% for month, days in analytics.completion_trend.items() %}
-            // Format month from YYYY-MM to MMM
-            const completionDate = new Date('{{ month }}-01');
-            const completionMonth = completionDate.toLocaleString('default', { month: 'short' });
-            completionLabels.push(completionMonth);
-            completionData.push({{ days }});
-        {% endfor %}
-        
-        const completionTimeChart = new Chart(completionTimeCtx, {
-            type: 'line',
-            data: {
-                labels: completionLabels.length > 0 ? completionLabels : ['No Data'],
-                datasets: [{
-                    label: 'Avg. Days to Complete',
-                    data: completionData.length > 0 ? completionData : [0],
-                    borderColor: '#9d0208',
-                    backgroundColor: 'rgba(157, 2, 8, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.1,
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
-                    }
-                }
-            }
-        });
+        }
     });
+    
+    // Revenue Chart
+    const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+    new Chart(revenueCtx, {
+        type: 'bar',
+        data: {
+            labels: months,
+            datasets: [{
+                label: 'Revenue ($)',
+                data: revenueData,
+                backgroundColor: 'rgba(0, 123, 255, 0.5)',
+                borderColor: 'rgba(0, 123, 255, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Clients Chart
+    const clientsCtx = document.getElementById('clientsChart').getContext('2d');
+    new Chart(clientsCtx, {
+        type: 'line',
+        data: {
+            labels: months,
+            datasets: [{
+                label: 'New Clients',
+                data: clientData,
+                backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                borderColor: 'rgba(40, 167, 69, 1)',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+});
 </script>
 {% endblock %}
