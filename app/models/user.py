@@ -2,15 +2,16 @@
 from sqlalchemy import Column, Integer, String, Boolean, Enum
 from sqlalchemy.orm import relationship
 from enum import Enum as PyEnum
+import os
 
 from .base import Base, TimestampMixin
 
 class UserRole(PyEnum):
     """User role enumeration."""
-    ADMIN = "admin"
-    APPRAISER = "appraiser"
-    REVIEWER = "reviewer"
-    CLIENT = "client"
+    ADMIN = "ADMIN"
+    APPRAISER = "APPRAISER"
+    REVIEWER = "REVIEWER"
+    CLIENT = "CLIENT"
 
 class User(Base, TimestampMixin):
     """User model."""

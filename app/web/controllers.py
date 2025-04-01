@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 from app.db.session import get_db
 from app.services.rag_service import RAGService
 from app.models.rag import Document, WebsiteUsage
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.services.dependencies import get_llm_service
 
 # Initialize templates
@@ -58,7 +58,7 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
     # In a real application, you would check authentication here
     
     # Get real stats from the database
-    client_count = db.query(User).filter(User.role == "client").count()
+    client_count = db.query(User).filter(User.role == UserRole.CLIENT).count()
     
     # Import the necessary models
     from app.models.client import Client
