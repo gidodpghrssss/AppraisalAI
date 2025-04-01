@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os
 import logging
+import sys
 
 from app.core.config import settings
 from app.api.v1.api import api_router
@@ -61,11 +62,35 @@ app.include_router(direct_router, prefix="/api", tags=["test"])
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# Try to include web router for the website
+# Create necessary directories
+os.makedirs("app/data/files", exist_ok=True)
+os.makedirs("app/data/embeddings", exist_ok=True)
+os.makedirs("app/static/css", exist_ok=True)
+os.makedirs("app/static/js", exist_ok=True)
+os.makedirs("app/static/images", exist_ok=True)
+
+# Try to include web router for the website with better error handling
 try:
     from app.web.controllers import router as web_router
-    app.include_router(web_router)
-    logger.info("Web router included successfully")
+    
+    # Check if templates directory exists
+    templates_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates")
+    if os.path.exists(templates_dir):
+        logger.info(f"Templates directory found at: {templates_dir}")
+        
+        # Mount static files if they exist
+        static_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+        if os.path.exists(static_dir):
+            app.mount("/static", StaticFiles(directory=static_dir), name="static")
+            logger.info(f"Static files mounted from: {static_dir}")
+        
+        # Include the web router
+        app.include_router(web_router)
+        logger.info("Web router included successfully")
+    else:
+        logger.warning(f"Templates directory not found at: {templates_dir}")
+        raise ImportError("Templates directory not found")
+        
 except ImportError as e:
     logger.warning(f"Web router import failed: {e}. Creating a placeholder router.")
     # Create a placeholder router if the web controllers are not available
@@ -76,21 +101,6 @@ except ImportError as e:
         return {"message": "Web interface is not available in this deployment"}
     
     app.include_router(web_router)
-
-# Mount static files
-try:
-    app.mount("/static", StaticFiles(directory="app/static"), name="static")
-except:
-    # Static directory might not exist in development
-    logger.warning("Static directory not found. Creating directory...")
-    pass
-
-# Create necessary directories
-os.makedirs("app/data/files", exist_ok=True)
-os.makedirs("app/data/embeddings", exist_ok=True)
-os.makedirs("app/static/css", exist_ok=True)
-os.makedirs("app/static/js", exist_ok=True)
-os.makedirs("app/static/images", exist_ok=True)
 
 @app.get("/")
 async def root():
