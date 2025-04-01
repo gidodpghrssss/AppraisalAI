@@ -10,6 +10,7 @@ import os
 import datetime
 import httpx
 import logging
+from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
@@ -693,19 +694,27 @@ async def login(
     """
     Process login form submission.
     """
-    # Check if the user exists
-    user = db.query(User).filter(User.email == username).first()
-    
     # Default admin credentials for initial setup
     default_admin_email = "admin@appraisalai.com"
     default_admin_password = "Admin123!"
     
-    # Check if user exists and password is correct, or if using default admin credentials
-    if (user and verify_password(password, user.hashed_password)) or \
-       (username == default_admin_email and password == default_admin_password):
-        # Set session cookie or token
+    # Check if using default admin credentials
+    if username == default_admin_email and password == default_admin_password:
+        # Set session cookie or token (simplified for now)
         response = RedirectResponse(url="/admin", status_code=303)
         return response
+    
+    # Try database login only if default credentials don't match
+    try:
+        # Check if the user exists
+        user = db.query(User).filter(User.email == username).first()
+        
+        # Check password if user exists
+        if user and verify_password(password, user.hashed_password):
+            response = RedirectResponse(url="/admin", status_code=303)
+            return response
+    except Exception as e:
+        logger.error(f"Error during database login: {e}")
     
     # If authentication fails, redirect back to login with error
     return templates.TemplateResponse(
