@@ -23,6 +23,13 @@ from app.services.dependencies import get_llm_service
 templates_dir = os.path.join(os.getcwd(), "app", "templates")
 templates = Jinja2Templates(directory=templates_dir)
 
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def verify_password(plain_password, hashed_password):
+    """Verify a password against a hash."""
+    return pwd_context.verify(plain_password, hashed_password)
+
 router = APIRouter()
 
 @router.get("/", response_class=HTMLResponse)
@@ -676,7 +683,7 @@ async def login_page(request: Request):
         {"request": request}
     )
 
-@router.post("/login")
+@router.post("/login", response_class=RedirectResponse)
 async def login(
     request: Request,
     username: str = Form(...),
@@ -686,22 +693,25 @@ async def login(
     """
     Process login form submission.
     """
-    # In a real application, you would validate credentials and set session
-    # For now, we'll just redirect to the dashboard
+    # Check if the user exists
+    user = db.query(User).filter(User.email == username).first()
     
-    # Check if user exists (placeholder)
-    user = db.query(User).filter(User.username == username).first()
+    # Default admin credentials for initial setup
+    default_admin_email = "admin@appraisalai.com"
+    default_admin_password = "Admin123!"
     
-    if not user:
-        return templates.TemplateResponse(
-            "admin/login.html",
-            {"request": request, "error": "Invalid username or password"}
-        )
+    # Check if user exists and password is correct, or if using default admin credentials
+    if (user and verify_password(password, user.hashed_password)) or \
+       (username == default_admin_email and password == default_admin_password):
+        # Set session cookie or token
+        response = RedirectResponse(url="/admin", status_code=303)
+        return response
     
-    # In a real app, you would check password hash
-    # For now, just redirect to dashboard
-    
-    return {"redirect": "/admin"}
+    # If authentication fails, redirect back to login with error
+    return templates.TemplateResponse(
+        "admin/login.html", 
+        {"request": request, "error": "Invalid username or password"}
+    )
 
 @router.get("/admin/api/clients", response_class=JSONResponse)
 async def api_get_clients(request: Request, db: Session = Depends(get_db)):
