@@ -1,0 +1,379 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Apeko Admin - AI Agent{% endblock %}
+
+{% block page_title %}AI Agent{% endblock %}
+
+{% block extra_css %}
+<style>
+    .agent-container {
+        display: flex;
+        height: calc(100vh - 120px);
+    }
+    
+    .agent-sidebar {
+        width: 300px;
+        background-color: #f5f5f5;
+        border-right: 1px solid #ddd;
+        padding: 15px;
+        overflow-y: auto;
+    }
+    
+    .agent-content {
+        flex: 1;
+        padding: 15px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .agent-header {
+        margin-bottom: 15px;
+    }
+    
+    .agent-chat {
+        flex: 1;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    .chat-messages {
+        flex: 1;
+        padding: 15px;
+        overflow-y: auto;
+        background-color: #f9f9f9;
+    }
+    
+    .chat-input {
+        display: flex;
+        padding: 10px;
+        border-top: 1px solid #ddd;
+        background-color: white;
+    }
+    
+    .chat-input input {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        margin-right: 10px;
+    }
+    
+    .message {
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .message-user {
+        align-items: flex-end;
+    }
+    
+    .message-agent {
+        align-items: flex-start;
+    }
+    
+    .message-content {
+        padding: 10px 15px;
+        border-radius: 15px;
+        max-width: 70%;
+    }
+    
+    .message-user .message-content {
+        background-color: #9d0208;
+        color: white;
+        border-top-right-radius: 0;
+    }
+    
+    .message-agent .message-content {
+        background-color: #e9e9e9;
+        border-top-left-radius: 0;
+    }
+    
+    .message-meta {
+        font-size: 0.8rem;
+        color: #777;
+        margin-top: 5px;
+    }
+    
+    .chat-list {
+        list-style: none;
+        padding: 0;
+    }
+    
+    .chat-item {
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .chat-item:hover {
+        background-color: #f0f0f0;
+    }
+    
+    .chat-item.active {
+        background-color: #9d0208;
+        color: white;
+    }
+    
+    .chat-item-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+    }
+    
+    .chat-item-title {
+        font-weight: 500;
+    }
+    
+    .chat-item-date {
+        font-size: 0.8rem;
+        color: #777;
+    }
+    
+    .chat-item.active .chat-item-date {
+        color: #f0f0f0;
+    }
+    
+    .chat-item-preview {
+        font-size: 0.9rem;
+        color: #555;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    .chat-item.active .chat-item-preview {
+        color: #f0f0f0;
+    }
+    
+    .agent-settings {
+        margin-top: 15px;
+    }
+    
+    .agent-settings h3 {
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .settings-group {
+        margin-bottom: 15px;
+    }
+    
+    .settings-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .settings-item label {
+        flex: 1;
+    }
+    
+    .settings-item select, .settings-item input {
+        width: 150px;
+        padding: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="agent-container">
+    <div class="agent-sidebar">
+        <div class="agent-sidebar-header">
+            <h3>Chat History</h3>
+            <button class="btn btn-primary btn-sm" id="newChatBtn"><i class="fas fa-plus"></i> New Chat</button>
+        </div>
+        <ul class="chat-list">
+            <li class="chat-item active">
+                <div class="chat-item-header">
+                    <div class="chat-item-title">Residential Appraisal</div>
+                    <div class="chat-item-date">Today</div>
+                </div>
+                <div class="chat-item-preview">How to evaluate a single-family home...</div>
+            </li>
+            <li class="chat-item">
+                <div class="chat-item-header">
+                    <div class="chat-item-title">Market Analysis</div>
+                    <div class="chat-item-date">Yesterday</div>
+                </div>
+                <div class="chat-item-preview">Current trends in commercial real estate...</div>
+            </li>
+            <li class="chat-item">
+                <div class="chat-item-header">
+                    <div class="chat-item-title">Regulation Questions</div>
+                    <div class="chat-item-date">Mar 28</div>
+                </div>
+                <div class="chat-item-preview">What are the latest USPAP guidelines for...</div>
+            </li>
+        </ul>
+        
+        <div class="agent-settings">
+            <h3>Agent Settings</h3>
+            <div class="settings-group">
+                <div class="settings-item">
+                    <label>Model</label>
+                    <select id="modelSelect">
+                        <option value="meta-llama/Meta-Llama-3.1-70B-Instruct" selected>Llama 3.1 70B</option>
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="claude-3">Claude 3</option>
+                    </select>
+                </div>
+                <div class="settings-item">
+                    <label>Temperature</label>
+                    <input type="range" min="0" max="1" step="0.1" value="0.7" id="tempRange">
+                    <span id="tempValue">0.7</span>
+                </div>
+                <div class="settings-item">
+                    <label>Use RAG</label>
+                    <input type="checkbox" checked id="useRag">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="agent-content">
+        <div class="agent-header">
+            <h3>Residential Appraisal</h3>
+            <p>Chat with the AI agent about appraisal topics, market analysis, and property valuation.</p>
+        </div>
+        
+        <div class="agent-chat">
+            <div class="chat-messages">
+                <div class="message message-agent">
+                    <div class="message-content">
+                        Hello! I'm your Apeko AI assistant. How can I help you with appraisals today?
+                    </div>
+                    <div class="message-meta">10:30 AM</div>
+                </div>
+                
+                <div class="message message-user">
+                    <div class="message-content">
+                        How do I evaluate a single-family home in a suburban area?
+                    </div>
+                    <div class="message-meta">10:31 AM</div>
+                </div>
+                
+                <div class="message message-agent">
+                    <div class="message-content">
+                        To evaluate a single-family home in a suburban area, you should follow these key steps:
+                        <br><br>
+                        1. <strong>Gather comparable sales data</strong> - Find 3-6 similar properties that have sold recently in the same neighborhood or within a 1-mile radius.
+                        <br><br>
+                        2. <strong>Analyze property characteristics</strong> - Assess the subject property's size, age, condition, layout, and features.
+                        <br><br>
+                        3. <strong>Make adjustments</strong> - Adjust comparable sale prices based on differences from the subject property.
+                        <br><br>
+                        4. <strong>Consider location factors</strong> - Evaluate school districts, proximity to amenities, and neighborhood trends.
+                        <br><br>
+                        5. <strong>Apply market trends</strong> - Factor in current market conditions and appreciation/depreciation rates.
+                        <br><br>
+                        Would you like me to elaborate on any of these steps?
+                    </div>
+                    <div class="message-meta">10:33 AM</div>
+                </div>
+            </div>
+            
+            <div class="chat-input">
+                <input type="text" placeholder="Type your message here..." id="messageInput">
+                <button class="btn btn-primary" id="sendBtn"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatMessages = document.querySelector('.chat-messages');
+        const tempRange = document.getElementById('tempRange');
+        const tempValue = document.getElementById('tempValue');
+        const newChatBtn = document.getElementById('newChatBtn');
+        const chatItems = document.querySelectorAll('.chat-item');
+        
+        // Update temperature value display
+        tempRange.addEventListener('input', function() {
+            tempValue.textContent = this.value;
+        });
+        
+        // Send message
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message) {
+                // Add user message
+                const now = new Date();
+                const time = now.getHours() + ':' + (now.getMinutes() < 10 ? '0' : '') + now.getMinutes();
+                
+                const userMessageHTML = `
+                    <div class="message message-user">
+                        <div class="message-content">
+                            ${message}
+                        </div>
+                        <div class="message-meta">${time}</div>
+                    </div>
+                `;
+                
+                chatMessages.insertAdjacentHTML('beforeend', userMessageHTML);
+                messageInput.value = '';
+                
+                // Scroll to bottom
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                
+                // In a real app, you would send the message to the backend here
+                // and wait for a response
+                
+                // Simulate agent response after a delay
+                setTimeout(function() {
+                    const agentMessageHTML = `
+                        <div class="message message-agent">
+                            <div class="message-content">
+                                I'm processing your question about "${message}". In a real implementation, this would be handled by the AI agent.
+                            </div>
+                            <div class="message-meta">${time}</div>
+                        </div>
+                    `;
+                    
+                    chatMessages.insertAdjacentHTML('beforeend', agentMessageHTML);
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }, 1000);
+            }
+        }
+        
+        // Send message on button click
+        sendBtn.addEventListener('click', sendMessage);
+        
+        // Send message on Enter key
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        // New chat button
+        newChatBtn.addEventListener('click', function() {
+            // In a real app, this would create a new chat session
+            alert('Creating new chat session...');
+        });
+        
+        // Chat item selection
+        chatItems.forEach(item => {
+            item.addEventListener('click', function() {
+                chatItems.forEach(i => i.classList.remove('active'));
+                this.classList.add('active');
+                
+                // In a real app, this would load the selected chat
+                const title = this.querySelector('.chat-item-title').textContent;
+                document.querySelector('.agent-header h3').textContent = title;
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,519 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Apeko Admin - RAG Database{% endblock %}
+
+{% block page_title %}RAG Database Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Additional styles for RAG Database page */
+    .document-filters {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .document-filter {
+        padding: 8px 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: white;
+    }
+    
+    .document-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    
+    .stat-card {
+        background-color: white;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        padding: 15px;
+        text-align: center;
+    }
+    
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #9d0208;
+        margin-bottom: 5px;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        color: #555;
+    }
+    
+    .document-list {
+        background-color: white;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    .document-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
+    .document-title {
+        font-size: 1.2rem;
+        font-weight: 500;
+    }
+    
+    .document-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .document-table th, .document-table td {
+        padding: 10px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .document-table th {
+        font-weight: 500;
+        color: #555;
+    }
+    
+    .document-table tr:hover {
+        background-color: #f9f9f9;
+    }
+    
+    .document-type {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        color: white;
+    }
+    
+    .document-type.appraisal {
+        background-color: #9d0208;
+    }
+    
+    .document-type.market {
+        background-color: #dc2f02;
+    }
+    
+    .document-type.regulation {
+        background-color: #f48c06;
+    }
+    
+    .document-type.property {
+        background-color: #6a994e;
+    }
+    
+    .document-type.other {
+        background-color: #7b8a8b;
+    }
+    
+    .document-actions {
+        display: flex;
+        gap: 5px;
+    }
+    
+    .query-list {
+        background-color: white;
+        border-radius: 5px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        padding: 20px;
+    }
+    
+    .query-item {
+        padding: 10px;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .query-text {
+        font-weight: 500;
+        margin-bottom: 5px;
+    }
+    
+    .query-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.8rem;
+        color: #777;
+    }
+    
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 100;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.5);
+    }
+    
+    .modal-content {
+        background-color: white;
+        margin: 10% auto;
+        padding: 20px;
+        border-radius: 5px;
+        width: 50%;
+        max-width: 600px;
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .modal-title {
+        font-size: 1.2rem;
+        font-weight: 500;
+    }
+    
+    .close {
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+        color: #777;
+    }
+    
+    .modal-body {
+        margin-bottom: 20px;
+    }
+    
+    .form-group {
+        margin-bottom: 15px;
+    }
+    
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+    
+    .form-group input, .form-group select, .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+    
+    .form-group textarea {
+        min-height: 100px;
+    }
+    
+    .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="document-stats">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_documents }}</div>
+        <div class="stat-label">Total Documents</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_chunks }}</div>
+        <div class="stat-label">Total Chunks</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.total_queries }}</div>
+        <div class="stat-label">Total Queries</div>
+    </div>
+    
+    <div class="stat-card">
+        <div class="stat-value">{{ document_types|length }}</div>
+        <div class="stat-label">Document Types</div>
+    </div>
+</div>
+
+<div class="document-filters">
+    <select class="document-filter">
+        <option value="all">All Document Types</option>
+        {% for type in document_types %}
+        <option value="{{ type }}">{{ type|title }}</option>
+        {% endfor %}
+    </select>
+    
+    <input type="text" class="document-filter" placeholder="Search documents...">
+    
+    <button class="btn btn-primary" id="addDocumentBtn">
+        <i class="fas fa-plus"></i> Add Document
+    </button>
+</div>
+
+<div class="document-list">
+    <div class="document-header">
+        <h3 class="document-title">Documents</h3>
+        <div class="document-actions">
+            <button class="btn btn-sm btn-secondary">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+    </div>
+    
+    <div class="table-responsive">
+        <table class="document-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Chunks</th>
+                    <th>Added</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in documents %}
+                <tr>
+                    <td>{{ doc.id }}</td>
+                    <td>{{ doc.title }}</td>
+                    <td><span class="document-type {{ doc.type_class }}">{{ doc.document_type }}</span></td>
+                    <td>{{ doc.chunk_count }}</td>
+                    <td>{{ doc.created_at }}</td>
+                    <td>
+                        <div class="document-actions">
+                            <button class="btn btn-sm btn-info" data-id="{{ doc.id }}" title="View">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" data-id="{{ doc.id }}" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <button class="btn btn-sm btn-secondary" data-id="{{ doc.id }}" title="Download">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="query-list">
+    <div class="document-header">
+        <h3 class="document-title">Recent Queries</h3>
+        <div class="document-actions">
+            <button class="btn btn-sm btn-secondary">
+                <i class="fas fa-history"></i> View All
+            </button>
+        </div>
+    </div>
+    
+    <div class="query-item">
+        <div class="query-text">What are the current guidelines for residential property appraisals?</div>
+        <div class="query-meta">
+            <span>2 hours ago</span>
+            <span>5 documents matched</span>
+        </div>
+    </div>
+    
+    <div class="query-item">
+        <div class="query-text">How do I calculate the cap rate for commercial properties?</div>
+        <div class="query-meta">
+            <span>Yesterday</span>
+            <span>3 documents matched</span>
+        </div>
+    </div>
+    
+    <div class="query-item">
+        <div class="query-text">What are the latest USPAP requirements for appraisal reports?</div>
+        <div class="query-meta">
+            <span>2 days ago</span>
+            <span>2 documents matched</span>
+        </div>
+    </div>
+</div>
+
+<!-- Add Document Modal -->
+<div id="addDocumentModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">Add Document to RAG Database</h3>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="addDocumentForm">
+                <div class="form-group">
+                    <label for="documentTitle">Document Title</label>
+                    <input type="text" id="documentTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="documentType">Document Type</label>
+                    <select id="documentType" required>
+                        <option value="">Select Document Type</option>
+                        <option value="appraisal_report">Appraisal Report</option>
+                        <option value="market_analysis">Market Analysis</option>
+                        <option value="regulation">Regulation</option>
+                        <option value="property_data">Property Data</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="documentFile">Upload Document</label>
+                    <input type="file" id="documentFile" required>
+                </div>
+                <div class="form-group">
+                    <label for="documentDescription">Description (Optional)</label>
+                    <textarea id="documentDescription"></textarea>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+            <button type="button" class="btn btn-primary" id="submitDocumentBtn">Add Document</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add Document Modal
+        const addDocumentModal = document.getElementById('addDocumentModal');
+        const addDocumentBtn = document.getElementById('addDocumentBtn');
+        const closeBtn = document.querySelector('.close');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const submitDocumentBtn = document.getElementById('submitDocumentBtn');
+        
+        // Open modal
+        addDocumentBtn.addEventListener('click', function() {
+            addDocumentModal.style.display = 'block';
+        });
+        
+        // Close modal
+        function closeModal() {
+            addDocumentModal.style.display = 'none';
+        }
+        
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(e) {
+            if (e.target === addDocumentModal) {
+                closeModal();
+            }
+        });
+        
+        // Submit document form
+        submitDocumentBtn.addEventListener('click', function() {
+            const form = document.getElementById('addDocumentForm');
+            const title = document.getElementById('documentTitle').value;
+            const type = document.getElementById('documentType').value;
+            const file = document.getElementById('documentFile').files[0];
+            
+            if (!title || !type || !file) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            // In a real app, you would submit the form to the server here
+            alert('Document added successfully!');
+            closeModal();
+            
+            // For demo purposes, add a new row to the table
+            const table = document.querySelector('.document-table tbody');
+            const newRow = document.createElement('tr');
+            
+            const typeClass = type.replace('_', '-');
+            const typeDisplay = type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            
+            newRow.innerHTML = `
+                <td>DOC-00${table.children.length + 1}</td>
+                <td>${title}</td>
+                <td><span class="document-type ${typeClass}">${typeDisplay}</span></td>
+                <td>0</td>
+                <td>Today</td>
+                <td>
+                    <div class="document-actions">
+                        <button class="btn btn-sm btn-info"><i class="fas fa-eye"></i></button>
+                        <button class="btn btn-sm btn-danger"><i class="fas fa-trash"></i></button>
+                        <button class="btn btn-sm btn-secondary"><i class="fas fa-download"></i></button>
+                    </div>
+                </td>
+            `;
+            
+            table.appendChild(newRow);
+        });
+        
+        // Document file preview
+        const documentFile = document.getElementById('documentFile');
+        documentFile.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.type === 'text/plain') {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const content = e.target.result;
+                        console.log('File content:', content.substring(0, 100) + '...');
+                    };
+                    
+                    reader.readAsText(file);
+                } else {
+                    console.log('Selected file:', file.name, file.type, file.size);
+                }
+            }
+        });
+        
+        // Document filter
+        const docTypeFilter = document.querySelector('.document-filter');
+        docTypeFilter.addEventListener('change', function() {
+            const selectedType = this.value;
+            console.log('Filtering by type:', selectedType);
+            
+            // In a real app, you would filter the table rows here
+            alert(`Filtering documents by type: ${selectedType}`);
+        });
+        
+        // View document
+        const viewBtns = document.querySelectorAll('.btn-info');
+        viewBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const docId = this.getAttribute('data-id');
+                window.location.href = `/admin/rag/documents/${docId}`;
+            });
+        });
+        
+        // Delete document
+        const deleteBtns = document.querySelectorAll('.btn-danger');
+        deleteBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                const docId = this.getAttribute('data-id');
+                
+                if (confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+                    fetch(`/api/v1/rag/documents/${docId}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        alert(data.message);
+                        window.location.reload();
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while deleting the document.');
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,200 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Apeko Admin - Appraisals{% endblock %}
+
+{% block page_title %}Appraisals{% endblock %}
+
+{% block content %}
+<div class="admin-section">
+    <div class="admin-card">
+        <div class="admin-card-header">
+            <h2>Appraisal Management</h2>
+            <button class="btn btn-primary" onclick="showCreateAppraisalModal()"><i class="fas fa-plus"></i> Create New Appraisal</button>
+        </div>
+        <div class="admin-card-body">
+            <div class="table-responsive">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Property</th>
+                            <th>Client</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Due Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% if projects %}
+                            {% for project in projects %}
+                            <tr>
+                                <td>{{ project.id }}</td>
+                                <td>{{ project.property_address }}</td>
+                                <td>{{ project.client_name }}</td>
+                                <td>{{ project.property_type }}</td>
+                                <td>
+                                    {% if project.status == ProjectStatus.DRAFT %}
+                                        <span class="status-badge status-draft">Draft</span>
+                                    {% elif project.status == ProjectStatus.IN_PROGRESS %}
+                                        <span class="status-badge status-in-progress">In Progress</span>
+                                    {% elif project.status == ProjectStatus.REVIEW %}
+                                        <span class="status-badge status-review">Review</span>
+                                    {% elif project.status == ProjectStatus.COMPLETED %}
+                                        <span class="status-badge status-completed">Completed</span>
+                                    {% else %}
+                                        <span class="status-badge">{{ project.status }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ project.created_date }}</td>
+                                <td>{{ project.due_date }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-info" onclick="editAppraisal({{ project.id }})"><i class="fas fa-edit"></i></button>
+                                    <button class="btn btn-sm btn-primary" onclick="viewAppraisal({{ project.id }})"><i class="fas fa-eye"></i></button>
+                                    <button class="btn btn-sm btn-success" onclick="generatePDF({{ project.id }})"><i class="fas fa-file-pdf"></i></button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="8" class="text-center">No appraisals found</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Appraisal Modal -->
+<div class="modal fade" id="createAppraisalModal" tabindex="-1" role="dialog" aria-labelledby="createAppraisalModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="createAppraisalModalLabel">Create New Appraisal</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="createAppraisalForm" action="/admin/appraisals/create" method="post">
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="appraisalTitle">Title</label>
+                            <input type="text" class="form-control" id="appraisalTitle" name="title" required>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="clientSelect">Client</label>
+                            <select class="form-control" id="clientSelect" name="client_id" required>
+                                <option value="">Select Client</option>
+                                <!-- Client options will be populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-12">
+                            <label for="propertyAddress">Property Address</label>
+                            <input type="text" class="form-control" id="propertyAddress" name="address" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-4">
+                            <label for="propertyCity">City</label>
+                            <input type="text" class="form-control" id="propertyCity" name="city" required>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="propertyState">State</label>
+                            <input type="text" class="form-control" id="propertyState" name="state" required>
+                        </div>
+                        <div class="form-group col-md-4">
+                            <label for="propertyZip">Zip Code</label>
+                            <input type="text" class="form-control" id="propertyZip" name="zip_code" required>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-md-6">
+                            <label for="propertyType">Property Type</label>
+                            <select class="form-control" id="propertyType" name="property_type" required>
+                                <option value="">Select Type</option>
+                                <option value="Residential">Residential</option>
+                                <option value="Commercial">Commercial</option>
+                                <option value="Industrial">Industrial</option>
+                                <option value="Land">Land</option>
+                            </select>
+                        </div>
+                        <div class="form-group col-md-6">
+                            <label for="dueDate">Due Date</label>
+                            <input type="date" class="form-control" id="dueDate" name="due_date">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="appraisalDescription">Description</label>
+                        <textarea class="form-control" id="appraisalDescription" name="description" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreateAppraisalForm()">Create Appraisal</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function showCreateAppraisalModal() {
+        // Load clients into the select dropdown
+        loadClients();
+        $('#createAppraisalModal').modal('show');
+    }
+    
+    function loadClients() {
+        // This would be an AJAX call to get clients in a real implementation
+        // For now, we'll just show a placeholder message
+        const clientSelect = document.getElementById('clientSelect');
+        clientSelect.innerHTML = '<option value="">Loading clients...</option>';
+        
+        // Simulating an AJAX call
+        setTimeout(() => {
+            fetch('/admin/api/clients')
+                .then(response => response.json())
+                .then(data => {
+                    clientSelect.innerHTML = '<option value="">Select Client</option>';
+                    data.forEach(client => {
+                        const option = document.createElement('option');
+                        option.value = client.id;
+                        option.textContent = client.name;
+                        clientSelect.appendChild(option);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading clients:', error);
+                    clientSelect.innerHTML = '<option value="">Error loading clients</option>';
+                });
+        }, 500);
+    }
+    
+    function submitCreateAppraisalForm() {
+        document.getElementById('createAppraisalForm').submit();
+    }
+    
+    function editAppraisal(appraisalId) {
+        // Placeholder for edit appraisal functionality
+        alert('Edit appraisal ' + appraisalId + ' (functionality to be implemented)');
+    }
+    
+    function viewAppraisal(appraisalId) {
+        // Placeholder for view appraisal functionality
+        window.location.href = '/admin/appraisals/' + appraisalId;
+    }
+    
+    function generatePDF(appraisalId) {
+        // Placeholder for generate PDF functionality
+        alert('Generate PDF for appraisal ' + appraisalId + ' (functionality to be implemented)');
+    }
+</script>
+{% endblock %}

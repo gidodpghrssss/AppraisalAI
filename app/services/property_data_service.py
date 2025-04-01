@@ -1,311 +1,394 @@
-import os
+"""
+Property data service for fetching property information from various sources.
+"""
+import httpx
+from typing import Dict, Any, List, Optional
 import json
-import requests
-import hashlib
-from typing import Dict, Any, Optional, List
+import os
+from datetime import datetime
+
 from app.core.config import settings
 from app.services.web_search_service import WebSearchService
 
 class PropertyDataService:
-    """Service for accessing free property data sources"""
+    """Service for retrieving property data from various sources."""
     
-    def __init__(self):
+    def __init__(self, web_search_service: WebSearchService = None):
+        """Initialize the property data service."""
+        self.cadastre_api_url = settings.CADASTRE_API_URL
+        self.market_data_api_url = settings.MARKET_DATA_API_URL
+        self.web_search_service = web_search_service or WebSearchService()
+        
         # Create cache directory if it doesn't exist
-        os.makedirs(settings.OPEN_DATA_CACHE_DIR, exist_ok=True)
-        self.web_search_service = WebSearchService()
+        os.makedirs("app/data/cache", exist_ok=True)
     
-    async def get_property_data(self, property_id: str) -> Dict[str, Any]:
-        """Get property data from available sources"""
+    async def get_property_details(self, property_id: str) -> Dict[str, Any]:
+        """
+        Get detailed information about a property.
+        
+        Args:
+            property_id: The ID of the property to retrieve
+            
+        Returns:
+            A dictionary containing property details
+        """
         # Check cache first
-        cached_data = self._get_from_cache(property_id)
+        cached_data = self._check_cache(property_id)
         if cached_data:
             return cached_data
+        
+        # If not in cache, fetch from API
+        try:
+            # In a real implementation, this would call the actual cadastre API
+            # For demo purposes, we'll return mock data
+            property_data = await self._get_mock_property_data(property_id)
             
-        # Try different data sources
-        if property_id.startswith("osm-"):
-            # OpenStreetMap data
-            osm_id = property_id.replace("osm-", "")
-            data = await self._get_osm_data(osm_id)
-        elif property_id.startswith("geo-"):
-            # Geocodio data (free tier)
-            address = property_id.replace("geo-", "")
-            data = await self._get_geocodio_data(address)
-        elif property_id.startswith("attom-"):
-            # ATTOM data (free tier)
-            attom_id = property_id.replace("attom-", "")
-            data = await self._get_attom_data(attom_id)
-        elif property_id.startswith("web-"):
-            # Web search data
-            address = property_id.replace("web-", "")
-            data = await self._get_web_search_data(address)
-        else:
-            # Generate mock data for development
-            data = self._generate_mock_data(property_id)
+            # Cache the data
+            self._cache_data(property_id, property_data)
             
-        # Cache the data
-        self._save_to_cache(property_id, data)
-        return data
+            return property_data
+        except Exception as e:
+            raise Exception(f"Failed to retrieve property data: {str(e)}")
     
-    async def search_properties(self, query: str, location: str = None, property_type: str = None) -> List[Dict[str, Any]]:
-        """Search for properties using available sources"""
-        # Try to get data from web search first if we have an address
-        if query and location and settings.BRAVE_API_KEY:
-            try:
-                web_data = await self.web_search_service.search_property_info(query, location)
-                if web_data and "address" in web_data:
-                    # Create a property ID for the web search result
-                    property_id = f"web-{web_data['address']}"
-                    
-                    # Cache the data
-                    self._save_to_cache(property_id, web_data)
-                    
-                    return [{
-                        "property_id": property_id,
-                        "address": web_data.get("address", ""),
-                        "property_type": property_type or "unknown",
-                        "estimated_value": web_data.get("estimated_value", 0),
-                        "source": "web_search"
-                    }]
-            except Exception as e:
-                print(f"Error searching with web search: {str(e)}")
+    async def get_comparable_properties(
+        self, 
+        location: str, 
+        property_type: str,
+        min_size: Optional[float] = None,
+        max_size: Optional[float] = None,
+        min_price: Optional[float] = None,
+        max_price: Optional[float] = None,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Get comparable properties based on criteria.
         
-        # For development, generate mock search results
-        results = []
+        Args:
+            location: The location to search in
+            property_type: The type of property
+            min_size: Minimum property size
+            max_size: Maximum property size
+            min_price: Minimum property price
+            max_price: Maximum property price
+            limit: Maximum number of results to return
+            
+        Returns:
+            A list of comparable properties
+        """
+        # In a real implementation, this would call the market data API
+        # For demo purposes, we'll return mock data
+        comparables = await self._get_mock_comparables(
+            location, 
+            property_type,
+            limit=limit
+        )
         
-        # Generate a deterministic set of results based on the query
-        seed = hashlib.md5(query.encode()).hexdigest()
-        num_results = min(5, max(1, int(seed[0], 16)))
+        # Filter by criteria
+        filtered_comparables = []
+        for comp in comparables:
+            if min_size and comp.get("size", 0) < min_size:
+                continue
+            if max_size and comp.get("size", 0) > max_size:
+                continue
+            if min_price and comp.get("price", 0) < min_price:
+                continue
+            if max_price and comp.get("price", 0) > max_price:
+                continue
+            filtered_comparables.append(comp)
         
-        for i in range(num_results):
-            property_id = f"prop-{seed[:8]}-{i}"
-            
-            # Create property data with some relation to the query
-            property_types = ["residential", "commercial", "industrial", "land"]
-            if property_type and property_type in property_types:
-                selected_type = property_type
-            else:
-                selected_type = property_types[int(seed[i], 16) % len(property_types)]
-                
-            # Use location in address if provided
-            address_location = location if location else "Example City"
-            
-            results.append({
-                "property_id": property_id,
-                "address": f"{100 + int(seed[i:i+2], 16)} {query.title()} St, {address_location}",
-                "property_type": selected_type,
-                "estimated_value": 100000 + (int(seed[i:i+6], 16) % 900000),
-                "source": "mock_data"
-            })
-            
-        return results
+        return filtered_comparables[:limit]
     
-    async def get_market_data(self, location: str, property_type: str = None) -> Dict[str, Any]:
-        """Get market data for a location"""
-        # Try to get data from web search first
-        if location and settings.BRAVE_API_KEY:
-            try:
-                web_data = await self.web_search_service.search_market_trends(location, property_type)
-                if web_data and "location" in web_data:
-                    return web_data
-            except Exception as e:
-                print(f"Error getting market data from web search: {str(e)}")
+    async def get_market_trends(self, location: str, property_type: str) -> Dict[str, Any]:
+        """
+        Get market trends for a specific location and property type.
         
-        # For development, generate mock market data
-        seed = hashlib.md5(f"{location}:{property_type or ''}".encode()).hexdigest()
+        Args:
+            location: The location to get trends for
+            property_type: The type of property
+            
+        Returns:
+            Market trend data
+        """
+        # In a real implementation, this would call the market data API
+        # For demo purposes, we'll return mock data
+        cache_key = f"trends_{location}_{property_type}"
+        cached_data = self._check_cache(cache_key)
+        if cached_data:
+            return cached_data
         
-        # Generate trends based on seed
-        price_trend = (int(seed[0:2], 16) - 128) / 128  # Range: -1.0 to 1.0
-        inventory_trend = (int(seed[2:4], 16) - 128) / 128
-        days_on_market = max(10, int(seed[4:6], 16) % 90)
-        
-        return {
+        # If not in cache, generate mock data
+        trends = {
             "location": location,
             "property_type": property_type,
-            "median_price": 200000 + (int(seed[6:10], 16) % 800000),
-            "price_trend_percent": round(price_trend * 10, 1),  # -10% to +10%
-            "inventory_trend_percent": round(inventory_trend * 20, 1),  # -20% to +20%
-            "average_days_on_market": days_on_market,
-            "market_health_index": round(max(1, min(10, 5 + price_trend * 5))),  # 1-10 scale
-            "source": "mock_data",
-            "timestamp": "2025-03-26T00:00:00Z"
+            "price_trends": {
+                "last_month": 2.3,  # percentage change
+                "last_quarter": 5.7,
+                "last_year": 8.2
+            },
+            "inventory_trends": {
+                "last_month": -1.5,  # percentage change
+                "last_quarter": -3.2,
+                "last_year": -7.8
+            },
+            "days_on_market": {
+                "current": 32,
+                "last_month": 35,
+                "last_quarter": 40,
+                "last_year": 45
+            },
+            "forecast": {
+                "next_quarter": 2.1,  # predicted percentage change
+                "next_year": 4.5
+            }
         }
+        
+        # Cache the data
+        self._cache_data(cache_key, trends)
+        
+        return trends
     
-    def _get_from_cache(self, property_id: str) -> Optional[Dict[str, Any]]:
-        """Get property data from cache"""
-        cache_path = os.path.join(settings.OPEN_DATA_CACHE_DIR, f"{property_id}.json")
-        if os.path.exists(cache_path):
+    async def search_property_regulations(self, location: str) -> List[Dict[str, Any]]:
+        """
+        Search for property regulations in a specific location.
+        
+        Args:
+            location: The location to search regulations for
+            
+        Returns:
+            A list of relevant regulations
+        """
+        # Use web search service to find regulations
+        search_results = await self.web_search_service.search(
+            f"property appraisal regulations in {location}"
+        )
+        
+        # Process and return the results
+        regulations = []
+        for result in search_results[:5]:  # Limit to top 5 results
+            regulations.append({
+                "title": result.get("title", ""),
+                "source": result.get("url", ""),
+                "snippet": result.get("snippet", ""),
+                "relevance": result.get("relevance", 0.0)
+            })
+        
+        return regulations
+    
+    def _check_cache(self, key: str) -> Optional[Dict[str, Any]]:
+        """Check if data is in cache and not expired."""
+        cache_file = f"app/data/cache/{key}.json"
+        if os.path.exists(cache_file):
             try:
-                with open(cache_path, 'r') as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"Error reading from cache: {str(e)}")
+                with open(cache_file, "r") as f:
+                    data = json.load(f)
+                
+                # Check if cache is expired (24 hours)
+                cache_time = datetime.fromisoformat(data.get("cache_time", "2000-01-01T00:00:00"))
+                now = datetime.now()
+                if (now - cache_time).total_seconds() < 86400:  # 24 hours
+                    return data.get("data")
+            except:
+                pass
+        
         return None
     
-    def _save_to_cache(self, property_id: str, data: Dict[str, Any]) -> None:
-        """Save property data to cache"""
-        cache_path = os.path.join(settings.OPEN_DATA_CACHE_DIR, f"{property_id}.json")
+    def _cache_data(self, key: str, data: Dict[str, Any]) -> None:
+        """Cache data with timestamp."""
+        cache_file = f"app/data/cache/{key}.json"
         try:
-            with open(cache_path, 'w') as f:
-                json.dump(data, f)
-        except Exception as e:
-            print(f"Error saving to cache: {str(e)}")
+            with open(cache_file, "w") as f:
+                json.dump({
+                    "data": data,
+                    "cache_time": datetime.now().isoformat()
+                }, f)
+        except:
+            # If caching fails, just continue without caching
+            pass
     
-    async def _get_osm_data(self, osm_id: str) -> Dict[str, Any]:
-        """Get property data from OpenStreetMap"""
-        if not settings.OPENSTREETMAP_ENABLED:
-            return self._generate_mock_data(f"osm-{osm_id}")
-            
-        url = f"https://nominatim.openstreetmap.org/lookup?osm_ids=N{osm_id}&format=json"
-        headers = {
-            "User-Agent": "AppraisalAI/1.0"
-        }
-        
-        try:
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200 and response.json():
-                data = response.json()[0]
-                return {
-                    "property_id": f"osm-{osm_id}",
-                    "address": data.get("display_name", ""),
-                    "lat": data.get("lat"),
-                    "lon": data.get("lon"),
-                    "type": data.get("type"),
-                    "category": data.get("category"),
-                    "source": "openstreetmap"
-                }
-        except Exception as e:
-            print(f"Error fetching OSM data: {str(e)}")
-            
-        return self._generate_mock_data(f"osm-{osm_id}")
-    
-    async def _get_geocodio_data(self, address: str) -> Dict[str, Any]:
-        """Get property data from Geocodio (has free tier)"""
-        if not settings.GEOCODIO_API_KEY:
-            return self._generate_mock_data(f"geo-{address}")
-            
-        url = f"https://api.geocod.io/v1.6/geocode?q={address}&api_key={settings.GEOCODIO_API_KEY}"
-        
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("results"):
-                    result = data["results"][0]
-                    return {
-                        "property_id": f"geo-{address}",
-                        "address": result.get("formatted_address", address),
-                        "lat": result.get("location", {}).get("lat"),
-                        "lon": result.get("location", {}).get("lng"),
-                        "accuracy": result.get("accuracy"),
-                        "accuracy_type": result.get("accuracy_type"),
-                        "source": "geocodio"
-                    }
-        except Exception as e:
-            print(f"Error fetching Geocodio data: {str(e)}")
-            
-        return self._generate_mock_data(f"geo-{address}")
-    
-    async def _get_attom_data(self, attom_id: str) -> Dict[str, Any]:
-        """Get property data from ATTOM (has free tier with limited requests)"""
-        if not settings.ATTOM_API_KEY:
-            return self._generate_mock_data(f"attom-{attom_id}")
-            
-        url = f"https://api.gateway.attomdata.com/propertyapi/v1.0.0/property/detail?id={attom_id}"
-        headers = {
-            "apikey": settings.ATTOM_API_KEY,
-            "Accept": "application/json"
-        }
-        
-        try:
-            response = requests.get(url, headers=headers)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("property"):
-                    prop = data["property"][0]
-                    return {
-                        "property_id": f"attom-{attom_id}",
-                        "address": f"{prop.get('address', {}).get('line1')} {prop.get('address', {}).get('line2', '')}",
-                        "city": prop.get('address', {}).get('city'),
-                        "state": prop.get('address', {}).get('state'),
-                        "zip": prop.get('address', {}).get('zip'),
-                        "lat": prop.get('location', {}).get('latitude'),
-                        "lon": prop.get('location', {}).get('longitude'),
-                        "property_type": prop.get('summary', {}).get('proptype'),
-                        "year_built": prop.get('summary', {}).get('yearbuilt'),
-                        "bedrooms": prop.get('building', {}).get('rooms', {}).get('beds'),
-                        "bathrooms": prop.get('building', {}).get('rooms', {}).get('bathstotal'),
-                        "sqft": prop.get('building', {}).get('size', {}).get('universalsize'),
-                        "lot_size": prop.get('lot', {}).get('depth'),
-                        "assessed_value": prop.get('assessment', {}).get('assessed', {}).get('assdttlvalue'),
-                        "source": "attom"
-                    }
-        except Exception as e:
-            print(f"Error fetching ATTOM data: {str(e)}")
-            
-        return self._generate_mock_data(f"attom-{attom_id}")
-    
-    async def _get_web_search_data(self, address: str) -> Dict[str, Any]:
-        """Get property data from web search"""
-        if not settings.BRAVE_API_KEY:
-            return self._generate_mock_data(f"web-{address}")
-        
-        # Extract city from address if possible
-        city = None
-        address_parts = address.split(',')
-        if len(address_parts) > 1:
-            city = address_parts[1].strip()
-            address = address_parts[0].strip()
-        
-        try:
-            web_data = await self.web_search_service.search_property_info(address, city)
-            if web_data:
-                # Add property_id to the data
-                web_data["property_id"] = f"web-{address}"
-                return web_data
-        except Exception as e:
-            print(f"Error fetching web search data: {str(e)}")
-            
-        return self._generate_mock_data(f"web-{address}")
-    
-    def _generate_mock_data(self, property_id: str) -> Dict[str, Any]:
-        """Generate mock property data for development"""
-        # Create a hash of the property_id for deterministic results
-        hash_val = hashlib.md5(property_id.encode()).hexdigest()
-        
-        # Use the hash to generate property details
+    async def _get_mock_property_data(self, property_id: str) -> Dict[str, Any]:
+        """Generate mock property data for demo purposes."""
+        # Generate different data based on property_id to simulate different properties
         property_types = ["residential", "commercial", "industrial", "land"]
-        property_type = property_types[int(hash_val[0], 16) % len(property_types)]
+        property_type = property_types[hash(property_id) % len(property_types)]
         
-        # Base value between $100,000 and $1,000,000
-        base_value = 100000 + (int(hash_val[1:7], 16) % 900000)
+        if property_type == "residential":
+            return {
+                "property_id": property_id,
+                "type": "residential",
+                "subtype": "single_family",
+                "address": {
+                    "street": "123 Main Street",
+                    "city": "Metropolis",
+                    "state": "NY",
+                    "zip": "10001",
+                    "country": "USA",
+                    "coordinates": {
+                        "latitude": 40.7128,
+                        "longitude": -74.0060
+                    }
+                },
+                "details": {
+                    "size": 2500,  # square feet
+                    "lot_size": 5000,  # square feet
+                    "year_built": 1995,
+                    "bedrooms": 4,
+                    "bathrooms": 2.5,
+                    "stories": 2,
+                    "garage": True,
+                    "garage_size": 2,  # cars
+                    "basement": True,
+                    "pool": False,
+                    "condition": "good"
+                },
+                "valuation": {
+                    "last_sale": {
+                        "date": "2018-05-15",
+                        "price": 450000
+                    },
+                    "tax_assessment": {
+                        "year": 2023,
+                        "value": 425000
+                    },
+                    "estimated_value": 520000
+                },
+                "legal": {
+                    "owner": "John Doe",
+                    "ownership_type": "fee_simple",
+                    "zoning": "R1",
+                    "encumbrances": ["mortgage"],
+                    "restrictions": []
+                }
+            }
+        elif property_type == "commercial":
+            return {
+                "property_id": property_id,
+                "type": "commercial",
+                "subtype": "retail",
+                "address": {
+                    "street": "456 Market Street",
+                    "city": "Metropolis",
+                    "state": "NY",
+                    "zip": "10002",
+                    "country": "USA",
+                    "coordinates": {
+                        "latitude": 40.7138,
+                        "longitude": -74.0070
+                    }
+                },
+                "details": {
+                    "size": 5000,  # square feet
+                    "lot_size": 7500,  # square feet
+                    "year_built": 2005,
+                    "stories": 1,
+                    "parking_spaces": 20,
+                    "condition": "excellent",
+                    "frontage": 50  # feet
+                },
+                "valuation": {
+                    "last_sale": {
+                        "date": "2020-08-23",
+                        "price": 1200000
+                    },
+                    "tax_assessment": {
+                        "year": 2023,
+                        "value": 1150000
+                    },
+                    "estimated_value": 1350000,
+                    "income": {
+                        "annual_rent": 120000,
+                        "occupancy_rate": 0.95,
+                        "expenses": 35000,
+                        "cap_rate": 0.07
+                    }
+                },
+                "legal": {
+                    "owner": "Market Street LLC",
+                    "ownership_type": "fee_simple",
+                    "zoning": "C2",
+                    "encumbrances": ["mortgage", "easement"],
+                    "restrictions": ["signage"]
+                },
+                "tenants": [
+                    {
+                        "name": "Coffee Shop Inc.",
+                        "lease_term": "5 years",
+                        "lease_start": "2021-01-01",
+                        "lease_end": "2025-12-31",
+                        "monthly_rent": 5000
+                    },
+                    {
+                        "name": "Bookstore LLC",
+                        "lease_term": "3 years",
+                        "lease_start": "2022-03-01",
+                        "lease_end": "2025-02-28",
+                        "monthly_rent": 4500
+                    }
+                ]
+            }
+        else:
+            # Generic property data for other types
+            return {
+                "property_id": property_id,
+                "type": property_type,
+                "address": {
+                    "street": f"{hash(property_id) % 999} Example Road",
+                    "city": "Metropolis",
+                    "state": "NY",
+                    "zip": "10001",
+                    "country": "USA"
+                },
+                "details": {
+                    "size": hash(property_id) % 10000 + 1000,
+                    "year_built": hash(property_id) % 50 + 1970
+                },
+                "valuation": {
+                    "estimated_value": hash(property_id) % 1000000 + 200000
+                }
+            }
+    
+    async def _get_mock_comparables(
+        self, 
+        location: str, 
+        property_type: str,
+        limit: int = 10
+    ) -> List[Dict[str, Any]]:
+        """Generate mock comparable properties for demo purposes."""
+        comparables = []
         
-        # Generate address
-        street_number = 100 + (int(hash_val[7:9], 16) % 9000)
-        streets = ["Main St", "Oak Ave", "Maple Rd", "Washington Blvd", "Park Lane"]
-        street = streets[int(hash_val[9], 16) % len(streets)]
-        cities = ["Springfield", "Riverdale", "Oakwood", "Maplewood", "Lakeside"]
-        city = cities[int(hash_val[10], 16) % len(cities)]
+        # Generate a deterministic but varied set of comparables
+        seed = hash(f"{location}_{property_type}")
         
-        # Generate property details
-        year_built = 1950 + (int(hash_val[11:13], 16) % 70)
-        sqft = 1000 + (int(hash_val[13:16], 16) % 5000)
-        lot_size = 5000 + (int(hash_val[16:20], 16) % 15000)
+        for i in range(limit):
+            # Vary the properties slightly based on the seed and index
+            price_base = 500000 if property_type == "residential" else 1200000
+            size_base = 2500 if property_type == "residential" else 5000
+            
+            # Create variation in the comparables
+            variation_factor = 0.8 + ((seed + i) % 40) / 100  # 0.8 to 1.2
+            
+            comp = {
+                "id": f"comp_{seed}_{i}",
+                "address": f"{100 + i} {location.title()} Ave",
+                "type": property_type,
+                "size": int(size_base * variation_factor),
+                "year_built": 2000 - (i % 20),
+                "price": int(price_base * variation_factor),
+                "price_per_sqft": int((price_base * variation_factor) / (size_base * variation_factor)),
+                "sale_date": f"2023-{(i % 12) + 1:02d}-{(i % 28) + 1:02d}",
+                "distance": round(0.5 + i * 0.2, 1),  # miles from subject property
+                "features": []
+            }
+            
+            # Add type-specific details
+            if property_type == "residential":
+                comp["bedrooms"] = 3 + (i % 3)
+                comp["bathrooms"] = 2 + (i % 2) + (0.5 if i % 2 == 0 else 0)
+                comp["features"] = ["garage"] + (["pool"] if i % 3 == 0 else []) + (["basement"] if i % 2 == 0 else [])
+            elif property_type == "commercial":
+                comp["frontage"] = 40 + (i * 5)
+                comp["parking_spaces"] = 15 + (i * 2)
+                comp["cap_rate"] = round(0.06 + (i % 5) * 0.005, 3)
+            
+            comparables.append(comp)
         
-        # Generate residential-specific details
-        bedrooms = 2 + (int(hash_val[20], 16) % 4) if property_type == "residential" else None
-        bathrooms = 1 + (int(hash_val[21], 16) % 4) if property_type == "residential" else None
-        
-        return {
-            "property_id": property_id,
-            "address": f"{street_number} {street}, {city}",
-            "property_type": property_type,
-            "sqft": sqft,
-            "year_built": year_built,
-            "bedrooms": bedrooms,
-            "bathrooms": bathrooms,
-            "lot_size": lot_size,
-            "last_sale_price": base_value,
-            "last_sale_date": f"2020-{1 + int(hash_val[22:24], 16) % 12}-{1 + int(hash_val[24:26], 16) % 28}",
-            "estimated_value": base_value * (1 + (int(hash_val[26:28], 16) % 50) / 100),
-            "source": "mock_data"
-        }
+        return comparables

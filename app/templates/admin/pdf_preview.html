@@ -1,0 +1,188 @@
+{% extends "admin/base_admin.html" %}
+
+{% block title %}Apeko Admin - PDF Preview{% endblock %}
+
+{% block page_title %}PDF Preview{% endblock %}
+
+{% block content %}
+<div class="admin-section">
+    <div class="admin-card">
+        <div class="admin-card-header">
+            <h2>PDF Preview for {{ project.title }}</h2>
+            <div>
+                <a href="/admin/appraisals/{{ project.id }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back to Project</a>
+                <button class="btn btn-primary" id="downloadPdfBtn"><i class="fas fa-download"></i> Download PDF</button>
+            </div>
+        </div>
+        <div class="admin-card-body">
+            <div class="pdf-preview-container">
+                <div class="pdf-preview-header">
+                    <h1>Appraisal Report</h1>
+                    <h2>{{ project.title }}</h2>
+                    <p class="pdf-date">Generated on: {{ current_date }}</p>
+                </div>
+                
+                <div class="pdf-preview-section">
+                    <h3>Property Information</h3>
+                    <div class="pdf-preview-table">
+                        <table class="table table-bordered">
+                            <tr>
+                                <th>Address:</th>
+                                <td>{{ project.property.address }}</td>
+                            </tr>
+                            <tr>
+                                <th>City:</th>
+                                <td>{{ project.property.city }}</td>
+                            </tr>
+                            <tr>
+                                <th>State:</th>
+                                <td>{{ project.property.state }}</td>
+                            </tr>
+                            <tr>
+                                <th>Zip Code:</th>
+                                <td>{{ project.property.zip_code }}</td>
+                            </tr>
+                            <tr>
+                                <th>Property Type:</th>
+                                <td>{{ project.property.property_type }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="pdf-preview-section">
+                    <h3>Client Information</h3>
+                    <div class="pdf-preview-table">
+                        <table class="table table-bordered">
+                            <tr>
+                                <th>Name:</th>
+                                <td>{{ project.client.name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Email:</th>
+                                <td>{{ project.client.email }}</td>
+                            </tr>
+                            {% if project.client.phone %}
+                            <tr>
+                                <th>Phone:</th>
+                                <td>{{ project.client.phone }}</td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="pdf-preview-section">
+                    <h3>Appraisal Summary</h3>
+                    <div class="pdf-preview-content">
+                        {% if project.description %}
+                            <p>{{ project.description }}</p>
+                        {% else %}
+                            <p>No description provided.</p>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="pdf-preview-section">
+                    <h3>Estimated Value</h3>
+                    <div class="pdf-preview-value">
+                        {% if project.estimated_value %}
+                            <h2>${{ "{:,.2f}".format(project.estimated_value) }}</h2>
+                        {% else %}
+                            <h2>Not yet determined</h2>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="pdf-preview-footer">
+                    <p>This is a preview of how the PDF report would look. In a real application, this would be a downloadable PDF document.</p>
+                    <p>&copy; {{ current_year }} Apeko - Professional Real Estate Appraisal Services</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Download PDF button
+    document.getElementById('downloadPdfBtn').addEventListener('click', function() {
+        alert('PDF download functionality would be implemented here in a real application.');
+    });
+</script>
+{% endblock %}
+
+{% block styles %}
+<style>
+    .pdf-preview-container {
+        background-color: white;
+        padding: 40px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .pdf-preview-header {
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #333;
+    }
+    
+    .pdf-preview-header h1 {
+        font-size: 24px;
+        margin-bottom: 10px;
+    }
+    
+    .pdf-preview-header h2 {
+        font-size: 20px;
+        margin-bottom: 10px;
+    }
+    
+    .pdf-date {
+        font-style: italic;
+        color: #666;
+    }
+    
+    .pdf-preview-section {
+        margin-bottom: 30px;
+    }
+    
+    .pdf-preview-section h3 {
+        font-size: 18px;
+        margin-bottom: 15px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #ddd;
+    }
+    
+    .pdf-preview-table {
+        margin-bottom: 20px;
+    }
+    
+    .pdf-preview-content {
+        line-height: 1.6;
+    }
+    
+    .pdf-preview-value {
+        text-align: center;
+        padding: 20px;
+        background-color: #f9f9f9;
+        border-radius: 5px;
+    }
+    
+    .pdf-preview-value h2 {
+        font-size: 28px;
+        color: #28a745;
+    }
+    
+    .pdf-preview-footer {
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 2px solid #333;
+        text-align: center;
+        font-size: 12px;
+        color: #666;
+    }
+</style>
+{% endblock %}
