@@ -11,6 +11,7 @@ import logging
 
 from app.core.config import settings
 from app.api.v1.api import api_router
+from app.api.direct import router as direct_router
 from app.db.init_db import init_db
 
 # Configure logging
@@ -20,9 +21,9 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI app
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url=f"{settings.API_V1_STR}/docs",
-    redoc_url=f"{settings.API_V1_STR}/redoc",
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Initialize database
@@ -42,11 +43,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Add a test endpoint to verify API functionality
-@app.get("/api/test")
-async def test_api():
-    """Test endpoint to verify API functionality."""
-    return {"status": "ok", "message": "API is working correctly"}
+# Add direct router for testing
+app.include_router(direct_router, prefix="/api", tags=["test"])
 
 # Include API router
 app.include_router(api_router, prefix=settings.API_V1_STR)
