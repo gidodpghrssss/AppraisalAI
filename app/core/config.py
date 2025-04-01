@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Appraisal AI Agent"
     
     # Server Configuration
-    PORT: int = int(os.getenv("PORT", "8002"))
+    PORT: int = int(os.getenv("PORT", "8001"))  # Changed default port to 8001
     HOST: str = os.getenv("HOST", "0.0.0.0")
     DEBUG: bool = os.getenv("DEBUG", "True").lower() == "true"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")

@@ -83,13 +83,26 @@ try:
         if os.path.exists(static_dir):
             app.mount("/static", StaticFiles(directory=static_dir), name="static")
             logger.info(f"Static files mounted from: {static_dir}")
+        else:
+            # Create static directory if it doesn't exist
+            os.makedirs(static_dir, exist_ok=True)
+            app.mount("/static", StaticFiles(directory=static_dir), name="static")
+            logger.info(f"Created and mounted static directory at: {static_dir}")
         
         # Include the web router
         app.include_router(web_router)
         logger.info("Web router included successfully")
     else:
         logger.warning(f"Templates directory not found at: {templates_dir}")
-        raise ImportError("Templates directory not found")
+        # Try to create templates directory
+        try:
+            os.makedirs(templates_dir, exist_ok=True)
+            logger.info(f"Created templates directory at: {templates_dir}")
+            app.include_router(web_router)
+            logger.info("Web router included after creating templates directory")
+        except Exception as e:
+            logger.error(f"Failed to create templates directory: {e}")
+            raise ImportError("Templates directory not found and could not be created")
         
 except ImportError as e:
     logger.warning(f"Web router import failed: {e}. Creating a placeholder router.")
@@ -98,7 +111,7 @@ except ImportError as e:
     
     @web_router.get("/")
     async def web_root():
-        return {"message": "Web interface is not available in this deployment"}
+        return {"message": "Web interface is not available in this deployment. Please check logs for details."}
     
     app.include_router(web_router)
 

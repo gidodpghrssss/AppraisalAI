@@ -16,9 +16,10 @@ COPY . .
 
 # Create necessary directories
 RUN mkdir -p app/data/files app/data/embeddings app/static/css app/static/js app/static/images
+RUN mkdir -p app/templates
 
 # Expose the port
-EXPOSE 8002
+EXPOSE 8001
 
 # Run the application
-CMD ["python", "run.py", "--api-only"]
+CMD gunicorn app.main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:${PORT:-8001}
