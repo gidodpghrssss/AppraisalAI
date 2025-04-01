@@ -24,6 +24,18 @@ app = FastAPI(
     openapi_url="/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc",
+    description="""
+    Appraisal AI Agent API
+    
+    This API provides access to the Appraisal AI Agent, which helps real estate appraisers with:
+    
+    - Property valuation using multiple methods
+    - Market analysis and data interpretation
+    - Report generation and quality control
+    - Project management
+    
+    The API is organized into several endpoints for different functionalities.
+    """
 )
 
 # Initialize database
@@ -83,7 +95,12 @@ os.makedirs("app/static/images", exist_ok=True)
 @app.get("/")
 async def root():
     """Root endpoint that redirects to the UI."""
-    return {"message": "Welcome to Appraisal AI Agent. Navigate to /ui for the web interface."}
+    return {
+        "message": "Welcome to Appraisal AI Agent",
+        "documentation": "/docs",
+        "api": "/api/v1",
+        "status": "running"
+    }
 
 if __name__ == "__main__":
     uvicorn.run(
