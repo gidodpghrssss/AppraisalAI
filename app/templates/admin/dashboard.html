@@ -171,11 +171,11 @@
                         <a href="/admin/rag" class="btn btn-primary">Manage Database</a>
                     </div>
                 </div>
-                <div class="dashboard-grid">
+                <div class="dashboard-stats">
                     <div class="dashboard-card">
                         <div class="dashboard-card-header">
-                            <h3 class="dashboard-card-title">Total Documents</h3>
-                            <div class="dashboard-card-icon icon-reports">
+                            <h4>Total Documents</h4>
+                            <div class="dashboard-card-icon">
                                 <i class="fas fa-file-alt"></i>
                             </div>
                         </div>
@@ -183,8 +183,8 @@
                     </div>
                     <div class="dashboard-card">
                         <div class="dashboard-card-header">
-                            <h3 class="dashboard-card-title">Total Chunks</h3>
-                            <div class="dashboard-card-icon icon-reports">
+                            <h4>Total Chunks</h4>
+                            <div class="dashboard-card-icon">
                                 <i class="fas fa-puzzle-piece"></i>
                             </div>
                         </div>
@@ -192,8 +192,8 @@
                     </div>
                     <div class="dashboard-card">
                         <div class="dashboard-card-header">
-                            <h3 class="dashboard-card-title">Total Queries</h3>
-                            <div class="dashboard-card-icon icon-views">
+                            <h4>Total Queries</h4>
+                            <div class="dashboard-card-icon">
                                 <i class="fas fa-search"></i>
                             </div>
                         </div>
@@ -201,13 +201,7 @@
                     </div>
                 </div>
                 <div class="dashboard-chart">
-                    <h3 class="dashboard-chart-title">Document Types Distribution</h3>
-                    <canvas id="documentTypesChart" 
-                            data-appraisal-report="{{ rag_stats.document_type_distribution.appraisal_report|default(0) }}"
-                            data-market-analysis="{{ rag_stats.document_type_distribution.market_analysis|default(0) }}"
-                            data-regulation="{{ rag_stats.document_type_distribution.regulation|default(0) }}"
-                            data-property-data="{{ rag_stats.document_type_distribution.property_data|default(0) }}"
-                            data-other="{{ rag_stats.document_type_distribution.other|default(0) }}"></canvas>
+                    <canvas id="documentTypeChart"></canvas>
                 </div>
             </div>
 
@@ -310,31 +304,37 @@
             }
         });
 
-        // Document Types Chart
-        const docTypesCtx = document.getElementById('documentTypesChart').getContext('2d');
-        const docTypesChart = new Chart(docTypesCtx, {
-            type: 'bar',
+        // Document Type Distribution Chart
+        const documentCtx = document.getElementById('documentTypeChart').getContext('2d');
+        const documentChart = new Chart(documentCtx, {
+            type: 'doughnut',
             data: {
-                labels: ['Appraisal Reports', 'Market Analysis', 'Regulations', 'Property Data', 'Other'],
+                labels: {{ document_data.labels | tojson }},
                 datasets: [{
-                    label: 'Document Count',
-                    data: [
-                        parseInt(document.getElementById('documentTypesChart').getAttribute('data-appraisal-report') || 5),
-                        parseInt(document.getElementById('documentTypesChart').getAttribute('data-market-analysis') || 8),
-                        parseInt(document.getElementById('documentTypesChart').getAttribute('data-regulation') || 3),
-                        parseInt(document.getElementById('documentTypesChart').getAttribute('data-property-data') || 6),
-                        parseInt(document.getElementById('documentTypesChart').getAttribute('data-other') || 2)
+                    label: 'Document Types',
+                    data: {{ document_data.counts | tojson }},
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.5)',
+                        'rgba(54, 162, 235, 0.5)',
+                        'rgba(255, 206, 86, 0.5)',
+                        'rgba(75, 192, 192, 0.5)',
+                        'rgba(153, 102, 255, 0.5)'
                     ],
-                    backgroundColor: '#9d0208',
-                    borderWidth: 0
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)'
+                    ],
+                    borderWidth: 1
                 }]
             },
             options: {
                 responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true
+                plugins: {
+                    legend: {
+                        position: 'right',
                     }
                 }
             }

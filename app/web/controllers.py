@@ -5,9 +5,11 @@ from fastapi import APIRouter, Request, Depends, HTTPException, Form, File, Uplo
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import os
-import datetime
+import json
+import random
+from datetime import datetime, timedelta
 import httpx
 import logging
 from passlib.context import CryptContext
@@ -99,6 +101,21 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
             logger.error(f"Error getting pending requests count: {e}")
             pending_requests = 0
         
+        # Prepare stats dictionary for the template
+        stats = {
+            "total_clients": total_clients,
+            "total_clients_change": 5,  # Mock change percentage
+            "total_appraisals": total_appraisals,
+            "active_projects": active_projects,
+            "pending_requests": pending_requests,
+            "website_visits": 1250,  # Mock value
+            "website_visits_change": 8,  # Mock change percentage
+            "total_reports": total_appraisals,
+            "total_reports_change": 5,  # Mock change percentage
+            "monthly_revenue": 15000,  # Mock value
+            "monthly_revenue_change": 15,  # Mock change percentage
+        }
+        
         # Use mock data for recent activities if database query fails
         try:
             # Get recent activities
@@ -126,13 +143,16 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
                 {"id": 4, "title": "Property Development Assessment", "client": "123 Properties", "date": "2025-03-25", "status": "draft"}
             ]
         
+        # Add recent activities to stats
+        stats["recent_activities"] = recent_activities
+        
         # Get RAG statistics
         try:
             # Get document counts by type
             document_counts = db.query(
-                Document.doc_type, 
+                Document.document_type, 
                 db.func.count(Document.id).label('count')
-            ).group_by(Document.doc_type).all()
+            ).group_by(Document.document_type).all()
             
             rag_stats = {doc_type: count for doc_type, count in document_counts}
             
@@ -173,20 +193,24 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
                 "counts": list(rag_stats.values())
             }
         
+        # Add RAG stats to the template context
+        rag_stats_data = {
+            "total_documents": total_documents,
+            "total_chunks": 450,  # Mock value
+            "total_queries": 250,  # Mock value
+            "document_type_distribution": rag_stats
+        }
+        
         # Render the dashboard template with all the data
         return templates.TemplateResponse(
             "admin/dashboard.html",
             {
                 "request": request,
-                "total_clients": total_clients,
-                "total_appraisals": total_appraisals,
-                "active_projects": active_projects,
-                "pending_requests": pending_requests,
-                "recent_activities": recent_activities,
-                "total_documents": total_documents,
-                "rag_stats": rag_stats,
+                "stats": stats,
+                "rag_stats": rag_stats_data,
                 "website_data": website_data,
-                "document_data": document_data
+                "document_data": document_data,
+                "active_page": "dashboard"
             }
         )
     except Exception as e:
@@ -197,15 +221,29 @@ async def admin_dashboard(request: Request, db: Session = Depends(get_db)):
             {
                 "request": request,
                 "error": f"Error loading dashboard data: {str(e)}",
-                "total_clients": 0,
-                "total_appraisals": 0,
-                "active_projects": 0,
-                "pending_requests": 0,
-                "recent_activities": [],
-                "total_documents": 0,
-                "rag_stats": {},
+                "stats": {
+                    "total_clients": 0,
+                    "total_clients_change": 0,
+                    "total_appraisals": 0,
+                    "active_projects": 0,
+                    "pending_requests": 0,
+                    "website_visits": 0,
+                    "website_visits_change": 0,
+                    "total_reports": 0,
+                    "total_reports_change": 0,
+                    "monthly_revenue": 0,
+                    "monthly_revenue_change": 0,
+                    "recent_activities": []
+                },
+                "rag_stats": {
+                    "total_documents": 0,
+                    "total_chunks": 0,
+                    "total_queries": 0,
+                    "document_type_distribution": {}
+                },
                 "website_data": {"labels": [], "visits": []},
-                "document_data": {"labels": [], "counts": []}
+                "document_data": {"labels": [], "counts": []},
+                "active_page": "dashboard"
             }
         )
 
